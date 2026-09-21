@@ -37,7 +37,7 @@ Detalhes e justificativas em [`CLAUDE.md`](CLAUDE.md).
 
 ## Instalação
 
-Não há dependências — só Node 20+.
+Não há dependências: só Node 22+ (o runner de testes usa glob, disponível a partir do 21).
 
 ```bash
 cp .env.example .env     # preencher instância e credenciais

@@ -5,13 +5,13 @@
   "type": "module",
   "description": "Agente read-only de mapeamento de itens de catalogo e record producers do ServiceNow",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "verify": "npm run check:syntax && npm run lint && npm test",
     "check:syntax": "node scripts/check-syntax.js",
     "lint": "node scripts/lint.js",
-    "test": "node --test",
+    "test": "node --test \"test/**/*.test.js\"",
     "test:connection": "node scripts/test-connection.js",
     "extract": "node scripts/extract.js",
     "next-batch": "node scripts/next-batch.js",
