@@ -1,0 +1,18 @@
+{
+  "name": "servicenow-catalog-mapping",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agente read-only de mapeamento de itens de catalogo e record producers do ServiceNow",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test:connection": "node scripts/test-connection.js",
+    "selftest": "node scripts/selftest.js",
+    "extract": "node scripts/extract.js",
+    "merge": "node scripts/merge-understandings.js",
+    "explore": "node scripts/explore.js",
+    "next-batch": "node scripts/next-batch.js"
+  }
+}
