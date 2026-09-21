@@ -1,0 +1,30 @@
+name: verify
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # O projeto nao tem dependencias. Quando tiver, trocar por `npm ci`
+      # (nunca `npm install`), conforme o padrao de harness.
+      - name: Verificar ausencia de lockfile inesperado
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json existe: troque este passo por 'npm ci'"
+            exit 1
+          fi
+
+      # Mesmo comando que roda no local. Se divergir, o harness esta quebrado.
+      - name: verify
+        run: npm run verify

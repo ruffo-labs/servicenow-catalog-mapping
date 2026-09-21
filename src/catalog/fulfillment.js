@@ -1,7 +1,7 @@
 import { rawValue as v, displayValue as d } from '../tableApi.js';
 
 /**
- * Descobre o que executa cada item — workflow legado e Flow Designer — pelos
+ * Descobre o que executa cada item: workflow legado e Flow Designer: pelos
  * tres caminhos possiveis, e (opcionalmente) confirma com o historico real de
  * execucao. Ver docs/fulfillment.md.
  *
@@ -17,7 +17,7 @@ const uniq = (arr) => [...new Set(arr.filter(Boolean))];
 
 /**
  * Campo da tabela destino que referencia de volta o item do catalogo.
- * Na Natura QA e `x_nasm_hr_case.item`, mas o nome varia por instancia — por
+ * Na Natura QA e `x_nasm_hr_case.item`, mas o nome varia por instancia: por
  * isso e descoberto no dicionario, nunca chutado.
  */
 async function findBackReference(api, table, cache) {
@@ -25,7 +25,7 @@ async function findBackReference(api, table, cache) {
   let field = null;
   try {
     // ATENCAO: o campo pode estar numa tabela PAI. Em x_nasm_rtr_case ele nao
-    // existe — esta em `task.x_nasm_hr_item`. Procurar so em `name=<table>`
+    // existe: esta em `task.x_nasm_hr_item`. Procurar so em `name=<table>`
     // fazia a busca voltar vazia e reportar 0 execucoes onde havia milhares.
     const { tableHierarchy } = await import('./collect.js');
     const chain = await tableHierarchy(api, table);
@@ -66,7 +66,7 @@ async function loadTriggerInputs(api, triggerIds) {
 }
 
 /**
- * Triggers cuja CONDICAO cita o sys_id do item. Vinculo exato — nao depende do
+ * Triggers cuja CONDICAO cita o sys_id do item. Vinculo exato: nao depende do
  * nome do campo usado na condicao.
  */
 async function findTriggersCitingItems(api, itemIds) {
@@ -91,7 +91,7 @@ async function findTriggersCitingItems(api, itemIds) {
   return hitsByItem;
 }
 
-/** Versao publicada de um workflow legado — onde table/condition realmente moram. */
+/** Versao publicada de um workflow legado: onde table/condition realmente moram. */
 async function loadWorkflowVersions(api, workflowIds) {
   const byWorkflow = new Map();
   for (const batch of chunks(workflowIds, api.maxIdsPerQuery('wf_workflow_version', { fields: ['workflow','table','condition','active','name'], queryOverhead: 30 }))) {
@@ -158,7 +158,7 @@ export async function collectFulfillment(api, items, { runtimeSample = 0 } = {},
     ...[...triggers.values()].map((t) => v(t.flow)),
   ]);
   // Ler da tabela BASE: a trigger pode apontar para o flow vivo (`sys_hub_flow`)
-  // ou para um `sys_hub_flow_snapshot` — copia pontual do mesmo flow. Consultar
+  // ou para um `sys_hub_flow_snapshot`: copia pontual do mesmo flow. Consultar
   // so `sys_hub_flow` deixava metade sem active/status.
   const flows = new Map();
   for (const batch of chunks(flowIds, api.maxIdsPerQuery('sys_hub_flow_base', { fields: ['sys_id','name','active','status','sys_class_name'] }))) {
@@ -212,7 +212,7 @@ export async function collectFulfillment(api, items, { runtimeSample = 0 } = {},
 
   // ---- Caminho 3b: fallback por TABELA DESTINO -----------------------------
   // Nem toda instancia condiciona a trigger no sys_id do item. No app de RH da
-  // Natura sim (`item=<id>`); no VRM nao — a tabela nem tem campo de volta para
+  // Natura sim (`item=<id>`); no VRM nao: a tabela nem tem campo de volta para
   // o catalogo. Para esses, listar o que dispara na tabela como CANDIDATO.
   const orphans = items.filter(
     (it) => v(it.table_name) && !result.get(v(it.sys_id)).flows.length,
@@ -224,7 +224,7 @@ export async function collectFulfillment(api, items, { runtimeSample = 0 } = {},
       if (!byTable.has(t)) byTable.set(t, []);
       byTable.get(t).push(v(it.sys_id));
     }
-    log(`sem vinculo exato: ${orphans.length} item(ns) em ${byTable.size} tabela(s) — buscando candidatos`);
+    log(`sem vinculo exato: ${orphans.length} item(ns) em ${byTable.size} tabela(s): buscando candidatos`);
 
     for (const [table, owners] of byTable) {
       const marks = await api.queryAll('sys_variable_value', {
@@ -250,7 +250,7 @@ export async function collectFulfillment(api, items, { runtimeSample = 0 } = {},
         })) fmap.set(v(f.sys_id), f);
       }
 
-      // Execucao real no ESCOPO DA TABELA (nao do item) — a tabela nao tem como
+      // Execucao real no ESCOPO DA TABELA (nao do item): a tabela nao tem como
       // atribuir o registro ao producer, entao o numero vale para a tabela toda.
       let execs = new Map();
       let lastByName = new Map();
@@ -296,7 +296,7 @@ export async function collectFulfillment(api, items, { runtimeSample = 0 } = {},
       const candidates = [...byKey.values()].map((x) => x.entry);
 
       // Uma trigger cuja condicao cita o sys_id de OUTRO item de catalogo e,
-      // por definicao, daquele outro item — nao candidata deste. Sem esse
+      // por definicao, daquele outro item: nao candidata deste. Sem esse
       // filtro, numa tabela com 148 producers cada orfao herdava as 200+
       // triggers alheias (9.008 entradas inuteis e 23 MB de JSON).
       const cited = uniq(candidates.flatMap(
@@ -387,7 +387,7 @@ export async function collectFulfillment(api, items, { runtimeSample = 0 } = {},
   for (const [itemId, entry] of result) {
     const byName = execByItem.get(itemId) ?? new Map();
     for (const f of entry.flows) {
-      // Candidato por tabela ja tem contagem no escopo da tabela — nao sobrescrever.
+      // Candidato por tabela ja tem contagem no escopo da tabela: nao sobrescrever.
       if (f.executions?.scope === 'table') continue;
       const hit = byName.get(f.name);
       f.executions = {

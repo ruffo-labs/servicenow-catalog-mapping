@@ -33,7 +33,7 @@ const understoodPath = resolve(outDir, '_scripts-understood.json');
 const cachePath = resolve(process.cwd(), '.cache/script-understandings.json');
 
 if (!existsSync(pendingPath)) {
-  console.error(`Falta ${pendingPath} — rode scripts/extract.js primeiro.`);
+  console.error(`Falta ${pendingPath}: rode scripts/extract.js primeiro.`);
   process.exit(1);
 }
 

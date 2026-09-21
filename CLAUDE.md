@@ -249,6 +249,32 @@ Regras de como explicar script (incluindo onde parar numa chamada GlideAjax):
 O filtro é **pedido a quem executa** — catálogo, categoria, nome, sys_id, tipo,
 ativo/inativo, atualizado depois de. Nunca rodar sem filtro sem confirmar antes.
 
+## Verificação
+
+```bash
+npm run verify        # sintaxe + lint + testes, mesmo comando do CI
+```
+
+Verde antes de pedir autorização de PR, sempre. Se passa local e falha no CI, o
+harness está quebrado e isso vira prioridade.
+
+O `test/readonly.test.js` é o teste que protege a DIRETRIZ #1: ele falha se
+alguém afrouxar o allowlist do cliente HTTP. Não mexa nele sem entender o que
+está desprotegendo.
+
+## Fluxo de entrega
+
+Nunca commit direto na `main`. Toda entrega nasce em `claude/<fase>-<descricao>`.
+
+Antes de abrir PR: `verify` verde, `HANDOFF.md` atualizado, dívida nova em
+`DEBT.md`, evidência apresentada (diff resumido e saída completa do verify,
+colada e não parafraseada), e a pergunta literal **"Autoriza abrir o PR?"**.
+Depois, parar e esperar.
+
+Merge é sempre do dono do projeto. Autorização de um PR não vale para o próximo.
+
+**Não afirme que está pronto, mostre a evidência.**
+
 ## Economia de token (medido, não estimado)
 
 **Fase 1 custa ZERO token** — é Node puro. Quantidade de chamadas HTTP não tem
@@ -292,7 +318,10 @@ src/catalog/fulfillment.js # flows, workflows e execução real
 scripts/extract.js        # fase 1
 scripts/next-batch.js     # fase 2 — corta o próximo lote
 scripts/merge-understandings.js  # fase 2 — injeta e atualiza o cache
-scripts/selftest.js       # testa a transformação sem rede
+scripts/lint.js           # lint de dominio (travessao, metodo de escrita)
+scripts/check-syntax.js   # checagem de sintaxe de todo o codigo
+test/readonly.test.js     # DIRETRIZ #1: bloqueia merge se o guard afrouxar
+test/transform.test.js    # contrato de saida, sem rede
 ```
 
 ## Documentação

@@ -8,11 +8,14 @@
     "node": ">=20"
   },
   "scripts": {
+    "verify": "npm run check:syntax && npm run lint && npm test",
+    "check:syntax": "node scripts/check-syntax.js",
+    "lint": "node scripts/lint.js",
+    "test": "node --test",
     "test:connection": "node scripts/test-connection.js",
-    "selftest": "node scripts/selftest.js",
     "extract": "node scripts/extract.js",
+    "next-batch": "node scripts/next-batch.js",
     "merge": "node scripts/merge-understandings.js",
-    "explore": "node scripts/explore.js",
-    "next-batch": "node scripts/next-batch.js"
+    "explore": "node scripts/explore.js"
   }
 }

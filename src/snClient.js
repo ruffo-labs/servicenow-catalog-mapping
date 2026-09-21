@@ -5,7 +5,7 @@ import { getConfig } from './config.js';
  *
  * ⛔ SOMENTE LEITURA. Ver DIRETRIZ #1 no CLAUDE.md.
  * Só GET e HEAD saem daqui. Não há flag, env var ou parâmetro que libere
- * escrita — isso é intencional. Se um dia for preciso escrever, é outro
+ * escrita: isso é intencional. Se um dia for preciso escrever, é outro
  * projeto, com outro cliente.
  */
 const ALLOWED_METHODS = Object.freeze(['GET', 'HEAD']);
@@ -24,7 +24,7 @@ export class ReadOnlyViolationError extends Error {
 export class ServiceNowError extends Error {
   constructor(status, body, url) {
     const detail = body?.error?.message || body?.error?.detail || (typeof body === 'string' ? body : '');
-    super(`ServiceNow ${status} em ${url}${detail ? ` — ${detail}` : ''}`);
+    super(`ServiceNow ${status} em ${url}${detail ? `: ${detail}` : ''}`);
     this.name = 'ServiceNowError';
     this.status = status;
     this.body = body;

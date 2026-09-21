@@ -44,7 +44,7 @@ async function main() {
     if (n) console.log(`  ${String(n).padStart(5)}  ${label.padEnd(18)} ${cls}`);
   }
 
-  console.log(`\nCATEGORIAS${catalog ? ' (neste catalogo)' : ''} — top 15 por volume`);
+  console.log(`\nCATEGORIAS${catalog ? ' (neste catalogo)' : ''}: top 15 por volume`);
   const categories = await api.queryAll('sc_category', {
     query: `active=true${catalog ? `^sc_catalog=${catalog}` : ''}`,
     fields: ['sys_id', 'title'],
@@ -59,7 +59,7 @@ async function main() {
     console.log(`  ${c.id}  ${String(c.n).padStart(5)} itens  ${c.title}`);
   }
 
-  console.log('\nAMOSTRA — 10 record producers (bons candidatos para o primeiro teste)');
+  console.log('\nAMOSTRA: 10 record producers (bons candidatos para o primeiro teste)');
   const sample = await api.query('sc_cat_item', {
     query: `active=true^sys_class_name=sc_cat_item_producer${scope}^ORDERBYname`,
     fields: ['sys_id', 'name'], limit: 10,

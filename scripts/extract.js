@@ -73,7 +73,7 @@ async function main() {
   const api = new TableApi();
   const log = (m) => console.log(`  ${m}`);
 
-  // active=true sozinho NAO e filtro — seria varrer a sc_cat_item inteira.
+  // active=true sozinho NAO e filtro: seria varrer a sc_cat_item inteira.
   const selective = Boolean(
     filter.rawQuery || filter.catalog || filter.category || filter.name ||
     filter.sysIds?.length || filter.updatedAfter || (filter.kind && filter.kind !== 'all'),
@@ -95,7 +95,7 @@ Ativo/inativo sozinho nao conta como filtro.
   console.log(`
 Query: ${pre.query}
 
-${pre.total} item(ns) — ${pre.items} catalog item, ${pre.producers} record producer
+${pre.total} item(ns): ${pre.items} catalog item, ${pre.producers} record producer
 `);
   if (!pre.total) {
     console.log('\nNada bateu com a query. Lembrete: a Table API filtra por ACL em silencio.\n');
@@ -106,7 +106,7 @@ ${pre.total} item(ns) — ${pre.items} catalog item, ${pre.producers} record pro
     `${r.table_name ? ` ${r.table_name.padEnd(34)}` : ' '.repeat(36)} ${r.name}\n      ${r.sys_id}`;
 
   // Acima de 40 itens a lista completa vira parede de texto e ninguem confere
-  // de verdade — que e justamente o passo obrigatorio da DIRETRIZ #2. Entao
+  // de verdade: que e justamente o passo obrigatorio da DIRETRIZ #2. Entao
   // resume por tabela destino e joga a lista inteira num arquivo.
   const COMPACT_FROM = 40;
   if (pre.total <= COMPACT_FROM) {
@@ -194,7 +194,7 @@ Scripts
   node scripts/next-batch.js --size 50
 `);
   } else {
-    console.log(`Nada novo para explicar — rode direto:
+    console.log(`Nada novo para explicar: rode direto:
   node scripts/merge-understandings.js
 `);
   }

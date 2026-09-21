@@ -242,9 +242,10 @@ muito por catálogo — sempre rode a fase 1 antes de decidir.
 
 - **Não adicione método de escrita ao cliente HTTP.** Se for preciso escrever, é
   outro projeto.
-- **Rode `node scripts/selftest.js`** depois de mexer em `shape.js`, `build.js`
-  ou `fields.js`. Ele valida a transformação sem rede, inclusive que o script
-  cru não vaza para o JSON.
+- **Rode `npm run verify`** antes de pedir autorização de PR. Ele roda sintaxe,
+  lint de domínio e os 29 testes, sem precisar de rede. Entre eles está o teste
+  que protege a DIRETRIZ #1: se alguém afrouxar o allowlist do cliente HTTP, o
+  merge trava.
 - **Ao adicionar campo**, inclua na lista de `fields.js` e rode o `extract` uma
   vez: a validação contra o `sys_dictionary` avisa se o campo não existe naquela
   instância, em vez de sair um JSON com valor vazio.

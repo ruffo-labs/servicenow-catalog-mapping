@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Valida credenciais, permissões de leitura e descobre o que esta instância
- * realmente expõe. Não escreve nada — nem na instância, nem em disco.
+ * realmente expõe. Não escreve nada: nem na instância, nem em disco.
  */
 import { TableApi, rawValue } from '../src/tableApi.js';
 import { ServiceNowClient, ReadOnlyViolationError } from '../src/snClient.js';
@@ -36,7 +36,7 @@ async function main() {
   for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
     try {
       await client.request('/api/now/table/incident', { method });
-      bad(`${method} NÃO foi bloqueado — PARE e investigue`);
+      bad(`${method} NÃO foi bloqueado: PARE e investigue`);
       process.exitCode = 1;
     } catch (err) {
       if (err instanceof ReadOnlyViolationError) ok(`${method} bloqueado`);
@@ -62,11 +62,11 @@ async function main() {
 
   console.log('\nMapa de item_option_new.type nesta instância:');
   try {
-    // 'type' e herdado da tabela question — o sys_choice fica la, nao em item_option_new.
+    // 'type' e herdado da tabela question: o sys_choice fica la, nao em item_option_new.
     const choices = await api.getFieldChoices('question', 'type');
     const entries = Object.entries(choices).sort((a, b) => Number(a[0]) - Number(b[0]));
     for (const [v, label] of entries) console.log(`  ${String(v).padStart(3)} = ${label}`);
-    if (!entries.length) bad('nenhuma choice encontrada — verificar idioma/ACL de sys_choice');
+    if (!entries.length) bad('nenhuma choice encontrada: verificar idioma/ACL de sys_choice');
   } catch (err) {
     bad(err.message);
   }

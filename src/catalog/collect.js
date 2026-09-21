@@ -53,7 +53,7 @@ export async function describeTable(api, table, wantedFields = []) {
 /** Busca em lote por um campo pai: `<field>IN<id1>,<id2>,...`. */
 async function fetchByParent(api, table, field, ids, fields, { orderBy } = {}) {
   if (!ids.length) return [];
-  // Tamanho do lote calculado pelo limite de URL, nao fixo — ver maxIdsPerQuery.
+  // Tamanho do lote calculado pelo limite de URL, nao fixo: ver maxIdsPerQuery.
   const size = api.maxIdsPerQuery(table, {
     fields,
     queryOverhead: field.length + 2 + (orderBy ? orderBy.length + 10 : 0),
@@ -94,7 +94,7 @@ function groupBy(records, field) {
  * @param {string} [filter.rawQuery]  encoded query extra
  */
 export function buildItemQuery(filter = {}) {
-  // Query crua tem precedencia e vai literal — e como o usuario normalmente opera.
+  // Query crua tem precedencia e vai literal: e como o usuario normalmente opera.
   if (filter.rawQuery) return filter.rawQuery;
 
   const parts = [];
@@ -114,7 +114,7 @@ const PRODUCER_CLASS = 'sc_cat_item_producer';
 /**
  * Passo obrigatorio antes de qualquer mapeamento: le apenas o minimo da
  * sc_cat_item (que ja traz itens de catalogo E record producers) e devolve
- * quantos sao, quais sao e de que tipo cada um e — para o usuario confirmar.
+ * quantos sao, quais sao e de que tipo cada um e: para o usuario confirmar.
  *
  * Nunca roda sem query: ler o catalogo inteiro nao e permitido.
  */
@@ -126,7 +126,7 @@ export async function preview(api, query) {
     query, fields: ['sys_id', 'name', 'sys_class_name', 'active'],
   });
 
-  // table_name so existe na classe filha — vale a chamada extra: e por ela que
+  // table_name so existe na classe filha: vale a chamada extra: e por ela que
   // se confere se o conjunto bate com o esperado quando sao muitos itens.
   const producerIds = records
     .filter((r) => rawValue(r.sys_class_name) === PRODUCER_CLASS)
@@ -170,7 +170,7 @@ export async function collect(api = new TableApi(), filter = {}, log = () => {},
   }
   log(`query dos itens: ${itemQuery}`);
 
-  // A sc_cat_item traz item de catalogo E record producer — e por ela que se descobre quem e quem.
+  // A sc_cat_item traz item de catalogo E record producer: e por ela que se descobre quem e quem.
   const discovered = await api.queryAll('sc_cat_item', { query: itemQuery, fields: F.ITEM_FIELDS });
   const itemIds = discovered.map((r) => rawValue(r.sys_id));
   if (!discovered.length) return emptyResult(itemQuery);

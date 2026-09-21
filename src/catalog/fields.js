@@ -6,7 +6,7 @@ export const ITEM_FIELDS = [
   'flow_designer_flow', 'workflow',
 ];
 
-/** Só existem na classe filha — exigem consulta separada em sc_cat_item_producer. */
+/** Só existem na classe filha: exigem consulta separada em sc_cat_item_producer. */
 export const PRODUCER_FIELDS = [
   'sys_id', 'table_name', 'redirect_url', 'view',
   'script', 'post_insert_script', 'save_script',

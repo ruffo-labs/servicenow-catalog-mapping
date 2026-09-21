@@ -80,7 +80,11 @@ scripts/
   extract.js             FASE 1
   next-batch.js          FASE 2 — corta o próximo lote
   merge-understandings.js FASE 2 — injeta e atualiza o cache
-  selftest.js            testa a transformação sem rede
+  lint.js                lint de dominio: travessao, metodo de escrita
+  check-syntax.js        checagem de sintaxe
+test/
+  readonly.test.js       DIRETRIZ #1: bloqueia merge se o guard afrouxar
+  transform.test.js      contrato de saida, sem rede
 docs/                    ver tabela acima
 out/                     saída (gitignored)
 .cache/                  dicionário e explicações de script (gitignored)

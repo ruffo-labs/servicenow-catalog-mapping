@@ -4,7 +4,7 @@
  *
  * Entradas:
  *   out/catalog-map.json          (fase 1)
- *   out/_scripts-pending.json     (fase 1 — traz o index ref -> hash)
+ *   out/_scripts-pending.json     (fase 1: traz o index ref -> hash)
  *   out/_scripts-understood.json  { "<hash>": "explicacao", ... }
  *   .cache/script-understandings.json  (acumulado de rodadas anteriores)
  *
@@ -22,7 +22,7 @@ const cachePath = resolve(process.cwd(), '.cache/script-understandings.json');
 
 for (const p of [mapPath, pendingPath]) {
   if (!existsSync(p)) {
-    console.error(`Falta ${p} — rode scripts/extract.js primeiro.`);
+    console.error(`Falta ${p}: rode scripts/extract.js primeiro.`);
     process.exit(1);
   }
 }

@@ -40,14 +40,14 @@ export class TableApi {
   /**
    * Todos os registros, paginando por keyset (sys_id) em vez de offset.
    * Offset profundo no ServiceNow degrada muito; keyset mantém custo constante.
-   * Requer que `query` não traga ORDERBY próprio — ele é substituído.
+   * Requer que `query` não traga ORDERBY próprio: ele é substituído.
    */
   async *iterate(table, { query = '', fields, pageSize, ...rest } = {}) {
     const size = pageSize ?? this.client.config.pageSize;
     const base = stripOrderBy(query);
 
     // ARMADILHA: com `^NQ` a encoded query vira grupos independentes, e o
-    // `^sys_id>cursor` gruda SO no ultimo grupo — os anteriores nunca avancam e
+    // `^sys_id>cursor` gruda SO no ultimo grupo: os anteriores nunca avancam e
     // a paginacao por keyset entra em loop infinito. Nesse caso, offset.
     if (/\^NQ/i.test(base) || /^NQ/i.test(base)) {
       yield* this.#iterateByOffset(table, { query: base, fields, size, ...rest });
@@ -82,7 +82,7 @@ export class TableApi {
       if (seen.has(next)) {
         throw new Error(
           `Paginacao travada em ${table}: o cursor parou em ${next}. ` +
-          `Query provavelmente incompativel com keyset — reporte com a query usada.`,
+          `Query provavelmente incompativel com keyset: reporte com a query usada.`,
         );
       }
       seen.add(next);
@@ -90,7 +90,7 @@ export class TableApi {
     }
   }
 
-  /** Paginacao por offset — usada quando a query tem `^NQ`. Mais cara, mas correta. */
+  /** Paginacao por offset: usada quando a query tem `^NQ`. Mais cara, mas correta. */
   async *#iterateByOffset(table, { query, fields, size, ...rest }) {
     for (let offset = 0; ; offset += size) {
       const { records } = await this.query(table, { ...rest, query, fields, limit: size, offset });
@@ -124,7 +124,7 @@ export class TableApi {
     }
   }
 
-  /** Contagem via Aggregate API — bem mais barato que puxar os registros. */
+  /** Contagem via Aggregate API: bem mais barato que puxar os registros. */
   async count(table, query = '') {
     const { result } = await this.client.request(`/api/now/stats/${table}`, {
       query: { sysparm_query: query, sysparm_count: true },
@@ -137,7 +137,7 @@ export class TableApi {
    *
    * ARMADILHA: acima de ~2048 chars o ServiceNow devolve 400 com a mensagem
    * "Pagination not supported", que nao tem relacao com a causa. Um CHUNK fixo
-   * quebra quando a lista de campos cresce — por isso o calculo e dinamico.
+   * quebra quando a lista de campos cresce: por isso o calculo e dinamico.
    */
   maxIdsPerQuery(table, { fields = [], queryOverhead = 0 } = {}) {
     const SAFE_URL = 1800;
@@ -150,7 +150,7 @@ export class TableApi {
   }
 
   /**
-   * Contagem agrupada via Aggregate API — uma chamada resolve o que seria uma
+   * Contagem agrupada via Aggregate API: uma chamada resolve o que seria uma
    * varredura. Ex.: execucoes por nome de flow numa tabela.
    */
   async groupCount(table, groupBy, query = '') {
@@ -173,7 +173,7 @@ export class TableApi {
     return Object.fromEntries(rows.map((r) => [rawValue(r.value), rawValue(r.label)]));
   }
 
-  /** Dicionário de uma tabela — útil para saber o que existe nesta versão da instância. */
+  /** Dicionário de uma tabela: útil para saber o que existe nesta versão da instância. */
   async getDictionary(table) {
     return this.queryAll('sys_dictionary', {
       query: `name=${table}^ORDERBYelement`,
@@ -181,7 +181,7 @@ export class TableApi {
     });
   }
 
-  /** true se a coluna existir na instância — evita quebrar por diferença de versão. */
+  /** true se a coluna existir na instância: evita quebrar por diferença de versão. */
   async hasField(table, element) {
     return (await this.count('sys_dictionary', `name=${table}^element=${element}`)) > 0;
   }

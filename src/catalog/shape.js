@@ -60,7 +60,7 @@ export function shapeRecord(record, fields, { dictionary = {}, labels = [] } = {
 /**
  * Script -> "" quando vazio, senão {script_understanding: null}.
  * O texto é preenchido na fase de enriquecimento por LLM; o script cru NÃO
- * entra no JSON final (decisão do contrato — é levantamento, não backup).
+ * entra no JSON final (decisão do contrato: é levantamento, não backup).
  */
 export function scriptSlot(rawScript) {
   return rawScript ? { script_understanding: null } : '';

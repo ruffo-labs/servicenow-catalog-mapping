@@ -33,7 +33,7 @@ function dictCachePath(api) {
  * Le o dicionario de todas as tabelas envolvidas e avisa sobre campos inexistentes.
  *
  * Custa 58 chamadas fixas (12 tabelas x caminhar a heranca), independente de
- * quantos itens forem mapeados — por isso fica em cache por instancia. O
+ * quantos itens forem mapeados: por isso fica em cache por instancia. O
  * dicionario so muda quando alguem altera a estrutura da instancia, entao o TTL
  * e de 7 dias; `refresh: true` ignora o cache.
  */
@@ -45,7 +45,7 @@ export async function loadDictionaries(api, log = () => {}, { refresh = false } 
       const cached = JSON.parse(readFileSync(cachePath, 'utf8'));
       const ageDays = (Date.now() - new Date(cached.generated_at).getTime()) / 86_400_000;
       if (ageDays < DICT_TTL_DAYS && cached.dictionaries) {
-        log(`dicionario do cache (${Math.round(ageDays * 24)}h, 0 chamadas) — --refresh-dict para reler`);
+        log(`dicionario do cache (${Math.round(ageDays * 24)}h, 0 chamadas): --refresh-dict para reler`);
         for (const w of cached.warnings ?? []) log(`AVISO  ${w}`);
         return { dictionaries: cached.dictionaries, warnings: cached.warnings ?? [], cached: true };
       }
