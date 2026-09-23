@@ -20,6 +20,7 @@ import { resolve } from 'node:path';
 import { TableApi } from '../src/tableApi.js';
 import { collect, preview } from '../src/catalog/collect.js';
 import { build, loadDictionaries } from '../src/catalog/build.js';
+import { timestamp, stampedPath, resumoDeRodadas } from '../src/outFiles.js';
 
 function parseArgs(argv) {
   const args = {};
@@ -50,6 +51,8 @@ Filtros:
   --confirm                 confirma a lista e executa o mapeamento
   --runtime [N]             confirma o fulfillment com execucao real (amostra de N
                             registros recentes por item; padrao 50, desligado sem a flag)
+  --volume                  conta os chamados ja abertos por item (Aggregate API, 3 janelas:
+                            total, 12 meses, 90 dias). Exato e barato; 0 token
   --refresh-dict            ignora o cache de dicionario e rele da instancia
   --out <dir>               padrao: out/
 `);
@@ -72,6 +75,9 @@ const outDir = resolve(process.cwd(), typeof args.out === 'string' ? args.out : 
 async function main() {
   const api = new TableApi();
   const log = (m) => console.log(`  ${m}`);
+  // Um carimbo por execucao: o preview, o mapa e a fila de scripts da mesma
+  // rodada compartilham o mesmo, e e por ele que o merge acha o par certo.
+  const stamp = timestamp();
 
   // active=true sozinho NAO e filtro — seria varrer a sc_cat_item inteira.
   const selective = Boolean(
@@ -125,7 +131,7 @@ ${pre.total} item(ns) — ${pre.items} catalog item, ${pre.producers} record pro
     if (inativos) console.log(`\n  ${inativos} item(ns) INATIVO(s) na lista`);
 
     mkdirSync(outDir, { recursive: true });
-    const listPath = resolve(outDir, '_preview.txt');
+    const listPath = stampedPath(outDir, '_preview', stamp, '.txt');
     writeFileSync(listPath, `${pre.query}\n\n${pre.rows.map(line).join('\n')}\n`, 'utf8');
     console.log(`\nLista completa dos ${pre.total}: ${listPath}`);
   }
@@ -144,7 +150,7 @@ Confira a lista acima. Para mapear estes ${pre.total} item(ns), repita o comando
   const runtimeSample = args.runtime === true ? 50
     : typeof args.runtime === 'string' ? Math.max(1, Number.parseInt(args.runtime, 10) || 50)
     : 0;
-  const collected = await collect(api, filter, log, { runtimeSample });
+  const collected = await collect(api, filter, log, { runtimeSample, volume: Boolean(args.volume) });
 
   if (!collected.items.length) {
     console.log('\nNenhum item bateu com o filtro. Confira o filtro e as permissoes de leitura.');
@@ -161,8 +167,9 @@ Confira a lista acima. Para mapear estes ${pre.total} item(ns), repita o comando
   const totalRefs = Object.keys(scriptIndex).length;
 
   mkdirSync(outDir, { recursive: true });
-  const mapPath = resolve(outDir, 'catalog-map.json');
-  const pendingPath = resolve(outDir, '_scripts-pending.json');
+  console.log(`\n${resumoDeRodadas(outDir, 'catalog-map')} — esta sai com o carimbo ${stamp}, nada e sobrescrito`);
+  const mapPath = stampedPath(outDir, 'catalog-map', stamp);
+  const pendingPath = stampedPath(outDir, '_scripts-pending', stamp);
   writeFileSync(mapPath, JSON.stringify(json, null, 4), 'utf8');
   writeFileSync(pendingPath, JSON.stringify({
     generated_at: new Date().toISOString(),
@@ -172,12 +179,18 @@ Confira a lista acima. Para mapear estes ${pre.total} item(ns), repita o comando
   }, null, 2), 'utf8');
 
   const bytes = fresh.reduce((n, s) => n + s.script.length, 0);
+  const veredito = (v) => json.itens.filter((x) => x.conversational?.veredito === v).length;
   console.log(`
 Resultado
   itens               ${json.itens.length}
   chamadas HTTP       ${api.client.requestCount}
   variable sets       ${json.variable_sets.length}
   user criteria       ${json.user_criteria.length}
+
+Conversacional (avaliacao, nao campo da instancia)
+  apto                ${veredito('apto')}
+  com ressalvas       ${veredito('com_ressalvas')}
+  bloqueado           ${veredito('bloqueado')}
 
 Scripts
   ocorrencias         ${totalRefs}
@@ -188,6 +201,33 @@ Scripts
   ${mapPath}
   ${pendingPath}
 `);
+
+  if (collected.volumeInfo) {
+    const top = [...collected.volumeByItem]
+      .map(([id, v]) => ({ id, ...v, nome: json.itens.find((x) => x.sys_id === id)?.name ?? id }))
+      .sort((a, b) => Number(b.total) - Number(a.total));
+    const soma = collected.volumeInfo.totalChamados;
+    const top10 = top.slice(0, 10).reduce((n, r) => n + Number(r.total), 0);
+    console.log(`Volume de chamados`);
+    console.log(`  total no recorte    ${soma.toLocaleString('pt-BR')}`);
+    console.log(`  itens sem nenhum    ${top.filter((r) => r.total === '0').length}`);
+    console.log(`  concentracao        top 10 = ${(top10 / (soma || 1) * 100).toFixed(1)}% do total`);
+    console.log();
+    for (const r of top.slice(0, 10)) {
+      console.log(`  ${String(r.total).padStart(7)} ${String(r.last_12m).padStart(7)} ${String(r.last_90d).padStart(6)}  ${r.nome}`);
+    }
+    console.log(`  ${'total'.padStart(7)} ${'12m'.padStart(7)} ${'90d'.padStart(6)}`);
+
+    // Item de fora do recorte com chamado na mesma tabela costuma ser
+    // producer desativado — mas se estiver ATIVO, e buraco no recorte.
+    const fora = [...collected.volumeInfo.foraDoRecorte].sort((a, b) => b[1].total - a[1].total);
+    if (fora.length) {
+      console.log(`
+  ${fora.length} item(ns) FORA deste recorte tem chamado nas mesmas tabelas`);
+      console.log(`  (${fora.reduce((n, [, c]) => n + c.total, 0).toLocaleString('pt-BR')} chamados — veja se sao inativos ou se faltou alguem no filtro)`);
+    }
+    console.log();
+  }
 
   if (fresh.length) {
     console.log(`Proximo passo: fase 2 em lotes retomaveis

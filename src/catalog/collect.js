@@ -163,7 +163,7 @@ export async function preview(api, query) {
  * Coleta tudo que o contrato precisa, em lote (uma chamada por tabela por lote
  * de 50 sys_ids, nao uma por item).
  */
-export async function collect(api = new TableApi(), filter = {}, log = () => {}, { runtimeSample = 0 } = {}) {
+export async function collect(api = new TableApi(), filter = {}, log = () => {}, { runtimeSample = 0, volume = false } = {}) {
   const itemQuery = buildItemQuery(filter);
   if (!itemQuery.trim()) {
     throw new Error('Query obrigatoria. Nao e permitido ler a sc_cat_item inteira sem filtro.');
@@ -223,8 +223,22 @@ export async function collect(api = new TableApi(), filter = {}, log = () => {},
   const { collectFulfillment } = await import('./fulfillment.js');
   const fulfillmentByItem = await collectFulfillment(api, items, { runtimeSample }, log);
 
+  // Volume de chamados: Aggregate API, contagem exata, 3 janelas. Opcional
+  // porque agrupa a tabela destino inteira — barato, mas so faz sentido
+  // quando o levantamento e para priorizar refatoracao.
+  let volumeByItem;
+  let volumeInfo;
+  if (volume) {
+    const { collectVolume } = await import('./volume.js');
+    const r = await collectVolume(api, items, log);
+    volumeByItem = r.byItem;
+    volumeInfo = r;
+  }
+
   return {
     fulfillmentByItem,
+    volumeByItem,
+    volumeInfo,
     itemQuery,
     items,
     producerIds: new Set(producerIds),
@@ -247,7 +261,7 @@ export async function collect(api = new TableApi(), filter = {}, log = () => {},
 
 function emptyResult(itemQuery) {
   return {
-    itemQuery, items: [], producerIds: new Set(), fulfillmentByItem: new Map(), variablesByItem: new Map(),
+    itemQuery, items: [], producerIds: new Set(), volumeByItem: undefined, volumeInfo: undefined, fulfillmentByItem: new Map(), variablesByItem: new Map(),
     variablesBySet: new Map(), choicesByVariable: new Map(), setLinksByItem: new Map(),
     sets: [], policiesByItem: new Map(), policiesBySet: new Map(), actionsByPolicy: new Map(),
     scriptsByItem: new Map(), scriptsBySet: new Map(), availableByItem: new Map(),

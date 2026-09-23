@@ -22,6 +22,12 @@ por campo, que é exatamente essa forma com outros nomes. O adaptador converte:
 {value: "abc", display_value: "Mobiles"} -> {_display_value: "Mobiles", __text: "abc"}
 ```
 
+## Nome dos arquivos
+
+Cada execução grava com o carimbo da hora no nome, então nada é sobrescrito:
+`catalog-map_2026-09-23_14-57-21.json`. O `-` no lugar do `:` é exigência do
+Windows. Detalhes e as exceções em `CLAUDE.md`.
+
 ## Estrutura
 
 Três coleções no topo. Variable sets e user criteria são **normalizados**:
@@ -96,6 +102,45 @@ Combinações e o que significam:
 | true | 0 | configurado, sem execução **na amostra** — pode ser item pouco usado ou poda do `sys_flow_context`. **Não** concluir que não roda |
 | `catalog_available_for[]` | `sc_cat_item_user_criteria_mtom?sysparm_query=sc_cat_item=<id>` |
 | `catalog_not_available_for[]` | `sc_cat_item_user_criteria_no_mtom?sysparm_query=sc_cat_item=<id>` |
+
+## `itens[].volume` — chamados já abertos
+
+Só existe quando o extract roda com `--volume`.
+
+```json
+"volume": {
+  "total": "53656", "last_12m": "11845", "last_90d": "1408",
+  "rank": "1", "share_pct": "8.29",
+  "source_table": "x_nasm_hr_case", "source_field": "x_nasm_hr_item",
+  "measured_at": "2026-09-23 02:10:00"
+}
+```
+
+`rank` e `share_pct` são calculados dentro do recorte, para não obrigar quem
+lê o JSON a ordenar 248 itens na mão. Item sem nenhum chamado sai com `"0"`
+explícito — ausência da chave significaria "não medido", que é outra coisa.
+
+## `itens[].conversational` — o item serve para a IA pedir?
+
+Sempre presente. **Avaliação**, não campo da instância: separa
+`declarado_na_instancia` (fato) de `veredito` / `bloqueadores` / `avisos`
+(regra aplicada sobre critérios publicados pela ServiceNow). Campo a campo e
+fontes em `docs/conversational.md`.
+
+## Coleções da tabela destino (arquivo irmão)
+
+Notificações, SLA/OLA, reports e portais **não** entram em `itens[]`: eles
+pertencem à tabela onde o record producer grava, não ao item. Saem em
+`related-map.json`, com o mesmo formato de valores deste contrato:
+
+```json
+{ "_scope": {...}, "notifications": [...], "slas": [...],
+  "reports": [...], "portals": [...] }
+```
+
+Campo a campo em `docs/related-objects.md`. Com `scripts/merge-related.js`
+essas coleções passam para dentro do `catalog-map.json` (o `_scope` vira
+`related_scope`), sem alterar `itens`, `variable_sets` nem `user_criteria`.
 
 ## `variable_sets[]` — origem `item_option_new_set`
 

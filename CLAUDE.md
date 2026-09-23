@@ -61,7 +61,7 @@ com código 1.
    lista quantos são, quais são (nome), se cada um é **Catalog Item** ou
    **Record Producer**, e a tabela destino dos producers.
    Acima de 40 itens a saída vira um resumo agrupado por tabela destino e a
-   lista completa vai para `out/_preview.txt` — parede de 500 linhas no
+   lista completa vai para `out/_preview_<carimbo>.txt` — parede de 500 linhas
    terminal ninguém confere, e conferir é o ponto deste passo.
 2. Mostrar essa lista ao usuário e **perguntar se são esses mesmos** que ele
    quer mapear.
@@ -112,6 +112,13 @@ até o usuário dizer o contrário.
   `choice_table`/`choice_field`/`lookup_*`.
 - **Record producer**: os três scripts (`script`, `post_insert_script`,
   `save_script`) viram `script_understanding`.
+- **Corpo do e-mail das notificações fica de fora.** São 388 KB de template
+  nesta instância; o que interessa é quando dispara, para quem e sob que
+  condição. Se um dia entrar, são ~99k tokens — medido.
+- **Os relacionados incluem as tabelas de tarefa**, não só as de caso: o SLA
+  mede o caso e o OLA mede a tarefa. Sem elas a coleção de OLA sai vazia.
+- **Reports entram todos**, inclusive os antigos — cada um leva
+  `sys_updated_on` e `shared_with[]`, então dá para filtrar depois.
 
 ### Levantamentos grandes
 
@@ -133,8 +140,11 @@ e por hash. No fim, rode a query completa para o consolidado (sai por ~0 token).
   campo, motor de fulfillment: tudo se lê do `sys_dictionary`/`sys_choice`. A
   memória do modelo já errou aqui (`redirect_to`/`view_id` não existem;
   `20` é Container End, não List Collector).
-- **Diga o grau de confiança.** No JSON isso é o campo `link`; no texto, é
-  separar "confirmado por execução" de "candidato".
+- **Diga o grau de confiança.** No JSON isso é o campo `link` do fulfillment e
+  o par `declarado_na_instancia` / `veredito` do conversacional; no texto, é
+  separar "confirmado por execução" de "candidato", e "campo da instância" de
+  "avaliação nossa". Nunca apresente regra de documentação de produto como se
+  fosse dado lido da instância.
 
 ## Modelo de dados do catálogo
 
@@ -203,6 +213,125 @@ Armadilhas já tratadas: ler de `sys_hub_flow_base` e não `sys_hub_flow`
 volta na hierarquia inteira; e nunca varrer os registros da tabela destino —
 amostrar os N mais recentes (`--runtime N`).
 
+## Objetos da tabela destino (notificações, SLA/OLA, reports, portais)
+
+Não pertencem ao item — pertencem à **tabela** onde o record producer grava.
+Saem num arquivo irmão, `related-map.json`, em coleções de topo. Roda depois
+do `extract.js`, lendo o `catalog-map.json` pronto:
+
+```bash
+node scripts/extract-related.js --map out/<fatia>/catalog-map.json            # confere
+node scripts/extract-related.js --map out/<fatia>/catalog-map.json --confirm  # coleta
+node scripts/merge-related.js out/<fatia>                                    # opcional: um arquivo so
+```
+
+| Coleção | Tabela | Campo de ligação |
+|---|---|---|
+| `notifications[]` | `sysevent_email_action` | `collection` |
+| `slas[]` (SLA **e** OLA, separados por `type`) | `contract_sla` | `collection` |
+| `reports[]` | `sys_report` | `table` |
+| `portals[]` | `sp_portal` | **nenhum** — via `m2m_sp_portal_catalog`, por catálogo |
+
+**O SLA mede o caso, o OLA mede a tarefa.** As tabelas de caso da Natura QA
+têm 454 SLA e **zero OLA**; os 404 OLA estão nas tabelas de tarefa. Por isso o
+recorte é "tudo que estende `task` nos mesmos `sys_scope`", resolvido pela
+herança — nunca por prefixo de nome.
+
+Armadilhas confirmadas nesta instância:
+
+- `sp_portal` usa `inactive`, **não** `active`
+- `sys_report` **não tem** `group_by`, `order_by` nem `chart_type`
+- `sp_portal.sc_catalog` é só o catálogo padrão (4 de 42 preenchidos); o
+  vínculo real é a m2m
+- o corpo do e-mail (`message_html`) **fica fora** do mapeamento, por decisão
+  do usuário — o que interessa é quando dispara, para quem e sob que condição
+
+Condições de notificação, SLA e report citam o sys_id do item direto
+(`item=6819789d...`): `cited_items[]` e os `<campo>_label` resolvem isso para
+nome. É o vínculo fino — a tabela diz "vale para os 148 itens", o
+`cited_items` diz para quais. Detalhes: `docs/related-objects.md`.
+
+## Volume de chamados e conversacional (dois blocos dentro do item)
+
+### `volume` — quantos chamados o item já gerou
+
+Responde "qual item atacar numa refatoração". Opcional, via `--volume`:
+
+```bash
+node scripts/extract.js --query "<query>" --confirm --runtime 50 --volume
+```
+
+Contagem **exata** pela Aggregate API (`sysparm_group_by`), uma chamada por
+tabela por janela. Nunca varrer registro — são 818 mil só nas cinco tabelas
+da Natura QA.
+
+Três janelas (`total`, `last_12m`, `last_90d`) porque **o acumulado engana**:
+"Realizar reembolso e prestação de contas" tem 39.283 no total e 1.027 nos
+últimos 12 meses. Priorizar pelo total levaria ao item errado.
+
+O campo de volta é descoberto pela hierarquia (`task.x_nasm_hr_item`, não
+`x_nasm_rtr_case.<algo>`) — a mesma armadilha de herança de sempre. Quando há
+mais de um candidato, ganha o que está de fato preenchido. Item sem
+`table_name` conta pelos RITMs (`sc_req_item.cat_item`).
+
+### `conversational` — dá para pedir o item pela IA?
+
+Sempre presente, custa zero chamada extra. **Não é campo da instância**: os
+campos existem (`make_item_non_conversational`, `turn_off_nowassist_conversation`,
+`conversational_label`, `topic_block`) e estão **vazios em 759 de 759 itens**
+na Natura QA. O bloco separa `declarado_na_instancia` (fato) de
+`veredito`/`bloqueadores`/`avisos` (regra aplicada por nós, sobre critérios
+publicados pela ServiceNow).
+
+Veredito: `apto`, `com_ressalvas` ou `bloqueado`. A avaliação inclui as
+variáveis, policies e scripts **dos variable sets que o item usa** — um set
+compartilhado derruba todos os itens que o usam.
+
+Critérios, fontes e como manter: `docs/conversational.md`.
+
+## Nomes de arquivo: carimbo de data/hora, nunca sobrescrever
+
+Todo artefato de `out/` sai com o carimbo da execução no nome:
+
+```
+out/<fatia>/catalog-map_2026-09-23_14-57-21.json
+out/<fatia>/_scripts-pending_2026-09-23_14-57-21.json
+out/<fatia>/_preview_2026-09-23_14-57-21.txt
+out/<fatia>/related-map_2026-09-23_15-10-02.json
+out/<fatia>/catalog-map-completo_2026-09-23_15-12-40.json
+```
+
+**Por que `-` e não `:` na hora:** dois-pontos é caractere proibido em nome
+de arquivo no Windows. O formato ordena lexicograficamente de propósito — o
+mais recente é o último em ordem alfabética, então achar a rodada nova não
+depende de `mtime`, que muda quando alguém copia arquivo.
+
+A hora é a **local** da máquina. As datas dentro do JSON (`measured_at`,
+`generated_at`) continuam em UTC.
+
+Quem resolve isso é `src/outFiles.js`:
+
+| Função | Para quê |
+|---|---|
+| `timestamp()` | o carimbo da execução — **um só por rodada** |
+| `newestRun(dir, base)` | o artefato mais recente; cai no nome antigo sem carimbo se não houver carimbado |
+| `companionOf(arquivo, dir, base)` | o par da **mesma** rodada |
+
+**`companionOf` não é luxo.** O `_scripts-pending` carrega o index
+`ref → hash` daquele `catalog-map` específico: cruzar rodadas diferentes
+preencheria explicação no registro errado, em silêncio.
+
+Três arquivos **não** levam carimbo, de propósito:
+
+| Arquivo | Por quê |
+|---|---|
+| `_scripts-batch.json` | caixa de entrada do lote atual, reescrita a cada lote |
+| `_scripts-understood.json` | caixa de saída do lote atual; o que não se perde vive no cache |
+| o próprio `catalog-map` no `merge-understandings` | ele **completa** a rodada, não gera outra. Carimbar por lote daria 20 cópias de 23 MB |
+
+Levantamentos feitos antes desta mudança (`catalog-map.json` sem carimbo)
+continuam sendo encontrados — o `newestRun` os trata como a rodada mais antiga.
+
 ## Paginação
 
 `TableApi.iterate` usa keyset (`sys_id>cursor`), que só é válido quando a
@@ -230,6 +359,16 @@ node scripts/next-batch.js --size 50     # corta o próximo lote
 #   -> explicar out/_scripts-batch.json conforme docs/script-understanding.md
 #   -> escrever out/_scripts-understood.json  { "<hash>": "explicacao" }
 node scripts/merge-understandings.js     # injeta no JSON e grava no cache
+
+# objetos da tabela destino (notificacoes, SLA/OLA, reports, portais) — 0 token
+node scripts/extract-related.js --map out/<fatia>/catalog-map.json --confirm
+
+# ORDEM IMPORTA: o extract-related regrava o related-map com os scripts em
+# branco. Ele vem ANTES do merge-understandings, senao as condicoes avancadas
+# das notificacoes voltam nulas no arquivo final.
+node scripts/merge-understandings.js out/<fatia>   # preenche catalogo E related
+node scripts/merge-related.js out/<fatia>          # opcional: tudo num arquivo so
+#   -> grava catalog-map-completo_<carimbo>.json; as entradas ficam intactas
 ```
 
 **Nunca tentar a fase 2 numa passada só.** Medido em 151 record producers: 462
@@ -282,6 +421,7 @@ e trunque scripts longos. Reler o mesmo trecho é desperdício puro.
 src/config.js             # carrega e valida env
 src/snClient.js           # camada HTTP — GET-only, retry, paginação
 src/tableApi.js           # helpers de query sobre a Table API
+src/outFiles.js           # nomes com carimbo e resolucao da rodada mais recente
 src/catalog/fields.js     # listas de campos por tabela
 src/catalog/collect.js    # coleta em lote + dicionário + filtro
 src/catalog/shape.js      # conversão para o formato do contrato
@@ -289,9 +429,14 @@ src/catalog/build.js      # montagem do JSON final
 scripts/test-connection.js
 scripts/explore.js        # descobre catalogos/categorias para montar o filtro
 src/catalog/fulfillment.js # flows, workflows e execução real
+src/catalog/related.js     # notificacoes, SLA/OLA, reports e portais da tabela destino
+src/catalog/volume.js      # chamados por item (Aggregate API, 3 janelas)
+src/catalog/conversational.js # avaliacao de item conversacional (VA / Now Assist)
 scripts/extract.js        # fase 1
+scripts/extract-related.js       # objetos da tabela destino
 scripts/next-batch.js     # fase 2 — corta o próximo lote
 scripts/merge-understandings.js  # fase 2 — injeta e atualiza o cache
+scripts/merge-related.js         # junta o related dentro do catalog-map
 scripts/selftest.js       # testa a transformação sem rede
 ```
 
@@ -304,6 +449,8 @@ scripts/selftest.js       # testa a transformação sem rede
 | `docs/runbook.md` | passo a passo de um levantamento + erros comuns |
 | `docs/output-schema.md` | contrato do JSON, campo a campo |
 | `docs/fulfillment.md` | flows, workflows, triggers e execução real |
+| `docs/related-objects.md` | notificações, SLA/OLA, reports e portais |
+| `docs/conversational.md` | critérios de item conversacional (VA / Now Assist) |
 | `docs/script-understanding.md` | como escrever as explicações |
 | `docs/table-api.md` | Table API, paginação e armadilhas |
 | `docs/token-economics.md` | custos medidos e o que otimizar |

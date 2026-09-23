@@ -11,6 +11,9 @@ contado.
 | Fase | O que faz | Custo |
 |---|---|---|
 | 1 — extração | Node puro: coleta, dedupe, fulfillment, montagem do JSON | **0 token** |
+| 1 — `--volume` | contagem de chamados por item, via Aggregate API | **0 token** |
+| Relacionados | notificações, SLA/OLA, reports e portais da tabela destino | **0 token** |
+| Conversacional | avaliação dos critérios sobre o que já foi extraído | **0 token** — nem chamada extra faz |
 | 2 — explicação | LLM lendo scripts e escrevendo `script_understanding` | proporcional aos **bytes de script único** |
 
 Consequência prática: **quantidade de chamadas HTTP não tem relação com token.**
@@ -175,3 +178,20 @@ script):
 Varia muito com o catálogo: o de sustentação ServiceNow tinha 2 scripts em 30
 itens; o de RH tinha 574 em 148. **Sempre rode a fase 1 primeiro** — ela dá o
 número exato de graça.
+
+## O que foi acrescentado depois, e quanto custou
+
+| Acréscimo | Chamadas | Token |
+|---|---|---|
+| Objetos da tabela destino (467 notif., 858 SLA/OLA, 650 reports, 2 portais) | 187 | **0** — mais 3 scripts de condição avançada, ~1k |
+| Volume de chamados (818 mil registros, 3 janelas) | 15 agregações | **0** |
+| Avaliação conversacional dos 248 itens | 0 | **0** |
+
+O conversacional é o caso extremo do princípio: ele não consulta nada: só aplica
+regra sobre o que a fase 1 já trouxe. Dá para reavaliar os critérios quantas
+vezes quiser sem gastar um token — basta rodar o `extract` de novo, e mesmo esse
+sai por ~0 porque os scripts estão em cache.
+
+**O corpo dos e-mails ficou de fora** e é o maior custo evitado até agora: 388
+KB, 362 textos distintos, **~99k tokens de entrada** se um dia entrar. Medido,
+não estimado.

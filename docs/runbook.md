@@ -2,6 +2,11 @@
 
 Passo a passo completo. Assume `.env` já preenchido (ver `README.md`).
 
+> **Nada em `out/` é sobrescrito.** Cada execução carimba o nome com
+> `YYYY-MM-DD_HH-MM-SS`, e os comandos seguintes acham sozinhos o arquivo mais
+> recente. Para trabalhar num levantamento antigo, aponte o caminho na mão
+> (`--map`, `--related`).
+
 ---
 
 ## 0. Antes de tudo: conferir a conexão
@@ -34,7 +39,7 @@ node scripts/extract.js --query "<query do usuário>"
 ```
 
 Sem `--confirm` ele só lista. Acima de 40 itens vira um resumo agrupado por
-tabela destino, e a lista completa vai para `out/_preview.txt`.
+tabela destino, e a lista completa vai para `out/_preview_<carimbo>.txt`.
 
 **Mostre a lista ao usuário e pergunte se são esses mesmos.** Este passo é a
 DIRETRIZ #2 e não se pula, nem com um item só.
@@ -55,21 +60,45 @@ Flags úteis:
 | Flag | Para quê |
 |---|---|
 | `--runtime [N]` | confirma fulfillment com execução real (N registros recentes por item; padrão 50). Sem a flag, só o estático |
+| `--volume` | conta os chamados já abertos por item (total, 12m, 90d). Exato, via Aggregate API, 0 token |
 | `--out <dir>` | separa a saída por fatia (`out/tax`, `out/ptp`...) |
 | `--refresh-dict` | relê o dicionário da instância (use depois de mudança de estrutura) |
 | `--help` | os demais filtros (`--catalog`, `--category`, `--name`, `--sys-id`, `--kind`) |
 
-## 4. Fase 2 — em lotes retomáveis
+## 4. Objetos da tabela destino (opcional, 0 token)
+
+Notificações, SLA/OLA, reports e portais das tabelas onde os record producers
+gravam. Roda **depois** do extract, lendo o `catalog-map.json` pronto:
+
+```bash
+node scripts/extract-related.js --out out/consolidado            # confere o recorte
+node scripts/extract-related.js --out out/consolidado --confirm  # coleta
+```
+
+Sem `--confirm` mostra o recorte (tabelas e contagens) para conferência. O
+recorte inclui as tabelas de **tarefa** do mesmo escopo, porque é onde moram
+os OLA. Sai em `related-map.json`. Ver `docs/related-objects.md`.
+
+> **Rode isto ANTES da fase 2.** O `extract-related` regrava o
+> `related-map.json` com os scripts em branco; se ele vier depois do
+> `merge-understandings`, as condições avançadas das notificações voltam
+> nulas no arquivo final. Se acontecer, é só rodar o `merge-understandings`
+> de novo — ele sabe preencher nos dois arquivos.
+
+## 5. Fase 2 — explicar os scripts, em lotes retomáveis
 
 ```bash
 node scripts/next-batch.js --size 50
 #   → ler out/_scripts-batch.json e explicar cada script
 #   → escrever out/_scripts-understood.json  { "<hash>": "explicação" }
-node scripts/merge-understandings.js
+node scripts/merge-understandings.js out/<fatia>
 ```
+Repetir até `next-batch` dizer que acabou. Ele lê as **duas** filas — a do
+catálogo e a dos relacionados — e o `merge-understandings` preenche os dois
+arquivos, achando sozinho a rodada mais recente e o par certo de cada uma.
 
-Repetir até `next-batch` dizer que acabou. As regras de como explicar (incluindo
-onde parar numa chamada GlideAjax) estão em `docs/script-understanding.md`.
+As regras de como explicar (incluindo onde parar numa chamada GlideAjax) estão
+em `docs/script-understanding.md`.
 
 **Nunca tente a fase 2 numa passada só.** Medido: 951 scripts, ~186k tokens.
 
@@ -90,18 +119,58 @@ Depois `slice(35)` — **não** `slice(30)`. Reler o mesmo trecho é desperdíci
 puro. Só leia um script grande por inteiro quando o trecho truncado não bastar
 para descrevê-lo com honestidade.
 
-## 5. Conferir
+## 6. Um arquivo só (opcional, último passo)
+
+```bash
+node scripts/merge-related.js out/consolidado
+```
+
+Pega o `catalog-map` e o `related-map` mais recentes da pasta e grava um
+**terceiro** arquivo, `catalog-map-completo_<carimbo>.json`. As duas entradas
+ficam intactas — por isso não existe cópia de segurança nem `--undo`: o
+original continua lá para comparar.
+
+Para juntar arquivos específicos em vez dos mais recentes:
+
+```bash
+node scripts/merge-related.js out/consolidado --map <arq> --related <arq>
+```
+
+Ele recusa juntar um `related-map` gerado de **outro recorte** — confere se os
+itens do escopo estão no mapa antes de escrever.
+
+É o último passo porque consome o estado final dos dois arquivos.
+
+## 7. Conferir
+
+Um comando só, que acha a rodada mais recente sozinho:
 
 ```bash
 node -e "
-const j=require('./out/catalog-map.json');
-let n=0; const scan=o=>{ if(o&&typeof o==='object'){
-  if('script_understanding' in o && o.script_understanding===null) n++;
-  for(const k in o) scan(o[k]); } };
-scan(j); console.log('pendências:', n);"
+import('./src/outFiles.js').then(async ({newestRun})=>{
+const fs=require('fs'), dir='out/consolidado';
+for (const base of ['catalog-map','related-map','catalog-map-completo']) {
+  const f=newestRun(dir,base); if(!f) continue;
+  const j=JSON.parse(fs.readFileSync(f,'utf8'));
+  let n=0,t=0; const scan=o=>{ if(o&&typeof o==='object'){
+    if('script_understanding' in o){ t++; if(o.script_understanding===null) n++; }
+    for(const k in o) scan(o[k]); } };
+  scan(j);
+  const v=(x)=>(j.itens||[]).filter(i=>i.conversational?.veredito===x).length;
+  console.log(require('path').basename(f));
+  console.log('   scripts', t, '| pendências', n);
+  if (j.itens) console.log('   itens', j.itens.length, '| com volume', j.itens.filter(i=>i.volume).length,
+    '| apto', v('apto'), 'ressalvas', v('com_ressalvas'), 'bloqueado', v('bloqueado'));
+  if (j.notifications) console.log('   notificações', j.notifications.length,
+    '| SLA/OLA', (j.slas||[]).length, '| reports', (j.reports||[]).length);
+}});"
 ```
 
-Tem que dar zero.
+**Pendências tem que dar zero** em todos.
+
+**Desconfie de número redondo demais ou vazio demais.** Vários bugs deste
+projeto apareceram assim, não em teste: `0 execuções` numa tabela com 92.540
+registros, `0 OLA` em 22 tabelas, um órfão herdando 200 triggers alheias.
 
 ---
 

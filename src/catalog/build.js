@@ -5,6 +5,7 @@ import { rawValue } from '../tableApi.js';
 import * as F from './fields.js';
 import { describeTable } from './collect.js';
 import { shapeRecord, snValue, scriptSlot, labelConditions } from './shape.js';
+import { assessConversational } from './conversational.js';
 
 const TABLES = {
   sc_cat_item: F.ITEM_FIELDS,
@@ -24,9 +25,9 @@ const TABLES = {
 const DICT_TTL_DAYS = 7;
 
 /** Caminho do cache de dicionario, separado por instancia. */
-function dictCachePath(api) {
+function dictCachePath(api, key = '') {
   const host = new URL(api.client.config.instanceUrl).hostname.replace(/[^a-z0-9.-]/gi, '_');
-  return resolve(process.cwd(), `.cache/dictionary-${host}.json`);
+  return resolve(process.cwd(), `.cache/dictionary-${key ? `${key}-` : ''}${host}.json`);
 }
 
 /**
@@ -37,14 +38,16 @@ function dictCachePath(api) {
  * dicionario so muda quando alguem altera a estrutura da instancia, entao o TTL
  * e de 7 dias; `refresh: true` ignora o cache.
  */
-export async function loadDictionaries(api, log = () => {}, { refresh = false } = {}) {
-  const cachePath = dictCachePath(api);
+export async function loadDictionaries(api, log = () => {}, { refresh = false, tables = TABLES, cacheKey = '' } = {}) {
+  const cachePath = dictCachePath(api, cacheKey);
 
   if (!refresh && existsSync(cachePath)) {
     try {
       const cached = JSON.parse(readFileSync(cachePath, 'utf8'));
       const ageDays = (Date.now() - new Date(cached.generated_at).getTime()) / 86_400_000;
-      if (ageDays < DICT_TTL_DAYS && cached.dictionaries) {
+      // Cache de uma versao anterior pode nao ter todas as tabelas pedidas agora.
+      const completo = cached.dictionaries && Object.keys(tables).every((t) => cached.dictionaries[t]);
+      if (ageDays < DICT_TTL_DAYS && completo) {
         log(`dicionario do cache (${Math.round(ageDays * 24)}h, 0 chamadas) — --refresh-dict para reler`);
         for (const w of cached.warnings ?? []) log(`AVISO  ${w}`);
         return { dictionaries: cached.dictionaries, warnings: cached.warnings ?? [], cached: true };
@@ -56,7 +59,7 @@ export async function loadDictionaries(api, log = () => {}, { refresh = false } 
 
   const dictionaries = {};
   const warnings = [];
-  for (const [table, fields] of Object.entries(TABLES)) {
+  for (const [table, fields] of Object.entries(tables)) {
     try {
       const { dictionary, missing } = await describeTable(api, table, fields);
       dictionaries[table] = dictionary;
@@ -143,6 +146,19 @@ export function build(collected, dictionaries) {
       return out;
     });
 
+  // Os variable sets sao montados ANTES dos itens e reaproveitados: a avaliacao
+  // conversacional do item precisa enxergar as variaveis, policies e scripts
+  // dos sets que ele usa. Montar duas vezes duplicaria o `used_by` do script.
+  const setVariables = new Map();
+  const setPolicies = new Map();
+  const setScripts = new Map();
+  for (const set of collected.sets) {
+    const id = rawValue(set.sys_id);
+    setVariables.set(id, (collected.variablesBySet.get(id) ?? []).map(buildVariable));
+    setPolicies.set(id, buildPolicies(collected.policiesBySet.get(id) ?? []));
+    setScripts.set(id, buildClientScripts(collected.scriptsBySet.get(id) ?? []));
+  }
+
   const itens = collected.items.map((item) => {
     const id = rawValue(item.sys_id);
     const out = shapeRecord(item, F.ITEM_FIELDS, { dictionary: dict('sc_cat_item') });
@@ -172,15 +188,28 @@ export function build(collected, dictionaries) {
     out.catalog_not_available_for = (collected.notAvailableByItem.get(id) ?? []).map((l) =>
       shapeRecord(l, F.UC_LINK_FIELDS, { dictionary: dict('sc_cat_item_user_criteria_no_mtom') }),
     );
+
+    // Volume de chamados — so existe quando o extract roda com --volume.
+    if (collected.volumeByItem?.has(id)) out.volume = collected.volumeByItem.get(id);
+
+    // Conversacional: o item nao e so o que esta nele — as variaveis, policies
+    // e scripts dos variable sets que ele usa entram na conta igual.
+    const setIds = (collected.setLinksByItem.get(id) ?? []).map((l) => rawValue(l.variable_set));
+    out.conversational = assessConversational(
+      out,
+      [...out.catalog_variables, ...setIds.flatMap((s) => setVariables.get(s) ?? [])],
+      [...out.catalog_client_script, ...setIds.flatMap((s) => setScripts.get(s) ?? [])],
+      [...out.catalog_ui_policies, ...setIds.flatMap((s) => setPolicies.get(s) ?? [])],
+    );
     return out;
   });
 
   const variable_sets = collected.sets.map((set) => {
     const id = rawValue(set.sys_id);
     const out = shapeRecord(set, F.SET_FIELDS, { dictionary: dict('item_option_new_set') });
-    out.vs_variables = (collected.variablesBySet.get(id) ?? []).map(buildVariable);
-    out.vs_ui_policies = buildPolicies(collected.policiesBySet.get(id) ?? []);
-    out.vs_catalog_client_scripts = buildClientScripts(collected.scriptsBySet.get(id) ?? []);
+    out.vs_variables = setVariables.get(id) ?? [];
+    out.vs_ui_policies = setPolicies.get(id) ?? [];
+    out.vs_catalog_client_scripts = setScripts.get(id) ?? [];
     return out;
   });
 

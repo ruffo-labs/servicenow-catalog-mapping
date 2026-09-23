@@ -10,9 +10,11 @@
   "scripts": {
     "test:connection": "node scripts/test-connection.js",
     "selftest": "node scripts/selftest.js",
-    "extract": "node scripts/extract.js",
-    "merge": "node scripts/merge-understandings.js",
     "explore": "node scripts/explore.js",
-    "next-batch": "node scripts/next-batch.js"
+    "extract": "node scripts/extract.js",
+    "extract:related": "node scripts/extract-related.js",
+    "next-batch": "node scripts/next-batch.js",
+    "merge": "node scripts/merge-understandings.js",
+    "merge:related": "node scripts/merge-related.js"
   }
 }

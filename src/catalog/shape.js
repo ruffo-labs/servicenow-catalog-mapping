@@ -42,13 +42,20 @@ export function snList(field) {
   return labels || ids.join(', ');
 }
 
-/** Aplica snRef/snList/snValue conforme o tipo do campo no dicionário. */
-export function shapeRecord(record, fields, { dictionary = {}, labels = [] } = {}) {
+/**
+ * Aplica snRef/snList/snValue conforme o tipo do campo no dicionário.
+ *
+ * `listFields` troca o conjunto de Glide Lists por tabela. O padrao e o global
+ * `LIST_FIELDS`, que serve ao catalogo; as tabelas relacionadas tem outro
+ * conjunto -- `sys_report.user`, por exemplo, e string com sys_id dentro, nao
+ * Glide List, e trata-lo como lista produziria uma referencia falsa.
+ */
+export function shapeRecord(record, fields, { dictionary = {}, labels = [], listFields = LIST_FIELDS } = {}) {
   const wantsLabel = new Set(labels);
   const out = {};
   for (const name of fields) {
     const raw = record[name];
-    if (LIST_FIELDS.has(name)) out[name] = snList(raw);
+    if (listFields.has(name)) out[name] = snList(raw);
     else if (dictionary[name]?.isReference) out[name] = snRef(raw);
     else out[name] = snValue(raw);
     // o label entra logo depois do campo, nao no fim do objeto

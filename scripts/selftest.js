@@ -6,6 +6,11 @@
 import { strict as assert } from 'node:assert';
 import { build } from '../src/catalog/build.js';
 import { snRef, snList, labelConditions } from '../src/catalog/shape.js';
+import { assessConversational } from '../src/catalog/conversational.js';
+import { mkdtempSync, writeFileSync as escreve } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, basename } from 'node:path';
+import { timestamp, stampedName, stampOf, listRuns, newestRun, companionOf } from '../src/outFiles.js';
 
 const f = (value, display = value) => ({ value, display_value: display });
 
@@ -102,6 +107,69 @@ assert.equal(carcaca.executions.count, '0', 'flow inativo sem execucao — o cas
 
 const keys = Object.keys(item.catalog_variables[0]);
 assert.equal(keys[keys.indexOf('type') + 1], 'type_label');
+console.log('  ok');
+
+console.log();
+console.log('conversacional');
+// O item do fixture tem client script sem va_supported -> tem que bloquear.
+assert.equal(item.conversational.veredito, 'bloqueado', 'client script sem VA Supported bloqueia');
+assert.ok(item.conversational.bloqueadores.some((b) => b.code === 'client_script_sem_va'));
+assert.equal(item.conversational.declarado_na_instancia.configurado_por_alguem, 'false',
+  'o fixture nao tem flag marcada na instancia');
+
+// Item limpo: nenhuma pendencia.
+const limpo = assessConversational(
+  { sys_class_name: 'sc_cat_item_producer', make_item_non_conversational: 'false', turn_off_nowassist_conversation: 'false' },
+  [{ type: '6', name: 'nome', active: 'true', conversational_label: 'Qual seu nome?' }],
+  [], [],
+);
+assert.equal(limpo.veredito, 'apto', 'sem bloqueador e sem aviso o item e apto');
+
+// Tipo Personalizado (14) bloqueia; com Topic Block vira ressalva.
+const custom = assessConversational({ sys_class_name: 'sc_cat_item' },
+  [{ type: '14', name: 'x', active: 'true', conversational_label: 'x' }], [], []);
+assert.equal(custom.veredito, 'bloqueado', 'tipo Personalizado bloqueia');
+const comBloco = assessConversational({ sys_class_name: 'sc_cat_item' },
+  [{ type: '14', name: 'x', active: 'true', conversational_label: 'x', topic_block: { __text: 'tb1' } }], [], []);
+assert.equal(comBloco.veredito, 'com_ressalvas', 'Topic Block destrava o tipo Personalizado');
+
+// A flag da instancia sozinha ja bloqueia.
+const desligado = assessConversational({ sys_class_name: 'sc_cat_item', make_item_non_conversational: 'true' }, [], [], []);
+assert.equal(desligado.veredito, 'bloqueado');
+assert.equal(desligado.declarado_na_instancia.configurado_por_alguem, 'true');
+
+// 21 e List Collector e 20 e Container End nesta instancia — nao o contrario.
+const lista = assessConversational({ sys_class_name: 'sc_cat_item' },
+  [{ type: '21', name: 'lc', active: 'true', conversational_label: 'lc' }], [], []);
+assert.ok(lista.avisos.some((a) => a.code === 'tipo_com_limitacao'), 'List Collector entra como ressalva');
+console.log('  ok');
+
+console.log();
+console.log('nomes de arquivo com carimbo');
+assert.equal(timestamp(new Date(2026, 8, 23, 14, 57, 21)), '2026-09-23_14-57-21');
+assert.ok(!timestamp().includes(':'), 'dois-pontos e proibido em nome de arquivo no Windows');
+assert.equal(stampedName('catalog-map', '2026-09-23_14-57-21'), 'catalog-map_2026-09-23_14-57-21.json');
+assert.equal(stampOf('catalog-map_2026-09-23_14-57-21.json'), '2026-09-23_14-57-21');
+assert.equal(stampOf('catalog-map.json'), null, 'nome antigo nao tem carimbo');
+
+const dir = mkdtempSync(join(tmpdir(), 'snmap-'));
+for (const f of [
+  'catalog-map.json',
+  'catalog-map_2026-09-20_10-00-00.json',
+  'catalog-map_2026-09-23_14-57-21.json',
+  '_scripts-pending.json',
+  '_scripts-pending_2026-09-23_14-57-21.json',
+  'catalog-map-completo_2026-09-23_16-00-00.json',
+]) escreve(join(dir, f), '{}');
+
+assert.equal(listRuns(dir, 'catalog-map').length, 3, 'o legado conta como rodada, o -completo nao');
+assert.equal(basename(newestRun(dir, 'catalog-map')), 'catalog-map_2026-09-23_14-57-21.json',
+  'o mais recente vem da ordem do nome, nao do mtime');
+assert.equal(basename(companionOf(newestRun(dir, 'catalog-map'), dir, '_scripts-pending')),
+  '_scripts-pending_2026-09-23_14-57-21.json', 'o par e o do MESMO carimbo');
+assert.equal(basename(companionOf(join(dir, 'catalog-map.json'), dir, '_scripts-pending')),
+  '_scripts-pending.json', 'levantamento antigo continua resolvendo');
+assert.equal(newestRun(dir, 'nao-existe'), null);
 console.log('  ok');
 
 console.log('\nJSON de exemplo gerado:\n');

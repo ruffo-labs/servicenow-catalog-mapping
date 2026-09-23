@@ -201,6 +201,125 @@ caberia em Script Includes parametrizados — dois critérios já fazem isso
 
 ---
 
+# Levantamento dos objetos relacionados (2026-09-21)
+
+Notificações, SLA/OLA, reports e portais das 22 tabelas do escopo. Ver
+`docs/related-objects.md`.
+
+## Condição avançada de notificação que nunca executa — 2 ocorrências
+
+`ACN: HTR Send Task Hispanic` e `ACN: HTR Send Task ESignature Hispanic`
+(ambas em `x_nasm_hr_case`) têm a mesma condição avançada com **dois defeitos**:
+
+```js
+function resqtAssign() {          // declarada como resqtAssign / resqtAsign
+    var request = current.parent.request_for;
+    var assigned = currend.assigned_to;   // currend, com d
+    if (assigned == request) return true;
+}
+conditionScript();                // chama uma função que não existe
+```
+
+Estoura `ReferenceError` antes de atribuir `answer`. A intenção — notificar só
+quando o responsável pela tarefa é quem abriu o caso pai — nunca acontece pelo
+caminho pretendido. Além disso a função não retorna nada quando os dois são
+diferentes.
+
+## Dois catálogos não estão em portal nenhum
+
+`Virtual Agent Search` (159 itens) e `Catálogo hispânico` (45 itens) não
+aparecem em `m2m_sp_portal_catalog`. Para o Virtual Agent Search é esperado —
+é catálogo de busca do VA, não de portal. **Para o Catálogo hispânico vale
+conferir**: são 45 itens ativos sem porta de entrada por Service Portal.
+
+## Onde o OLA mora
+
+Não é achado de defeito, é de topologia, e muda quem procura: as 5 tabelas de
+caso têm 454 SLA e **zero OLA**. Os 404 OLA estão nas tabelas de tarefa —
+`x_nasm_hr_htr_task` sozinha tem 146. Quem for auditar prazo de atendimento
+precisa olhar as duas camadas.
+
+## As 858 definições de SLA/OLA usam Flow Designer, nenhuma usa workflow
+
+`contract_sla.flow` preenchido nas 858, `contract_sla.workflow` em zero. É o
+oposto do que se vê nos itens de catálogo desta mesma instância.
+
+---
+
+---
+
+# Volume de chamados e conversacional (2026-09-23)
+
+Contagem exata pela Aggregate API sobre `task.x_nasm_hr_item`. Ver
+`docs/conversational.md` e o bloco `volume` em `docs/output-schema.md`.
+
+## Metade dos chamados está em 10 itens
+
+**647.511 chamados** nos 248 itens; o top 10 concentra **49,1%**. Se a
+refatoração for por impacto, ela cabe numa lista curta:
+
+| total | 12m | 90d | item |
+|---|---|---|---|
+| 53.656 | 11.845 | 1.408 | Lançamento de Atestados |
+| 46.237 | 13.770 | 1.588 | Lançamento Contábil - Natura + TBS |
+| 44.283 | 11.178 | 1.636 | Ajuste de Lançamento de Fornecedor |
+| 39.283 | 1.027 | 97 | Realizar reembolso e prestação de contas |
+| 32.604 | 12.159 | 1.250 | Consulta de Fornecedores "Externo" |
+
+## O acumulado histórico engana
+
+`Realizar reembolso e prestação de contas` é o 4º maior de todos os tempos
+(39.283) e tem **1.027 nos últimos 12 meses** — 97 nos últimos 90 dias.
+Priorizar pelo total levaria a refatorar um item que está morrendo. É por
+isso que o bloco `volume` grava três janelas, não uma.
+
+## 29 itens ativos nunca receberam um chamado
+
+E outros 4 têm histórico mas zero nos últimos 12 meses. Candidatos naturais
+a desativar antes de refatorar qualquer coisa.
+
+## Três itens ATIVOS de fora do recorte, com volume
+
+80 itens fora do mapeamento têm 170.022 chamados nessas mesmas tabelas. 77
+são record producers **inativos** — histórico, esperado. Mas três estão
+ativos e ficaram de fora porque o filtro do levantamento não cobre o
+catálogo deles:
+
+| chamados | catálogo | item |
+|---|---|---|
+| 7.818 | Catálogo Genérico | **Admissão** |
+| 23 | (sem catálogo) | Llamado simples |
+| 7 | Catálogo Genérico | Aditivos ao contrato de trabalho |
+
+`Admissão` sozinho tem mais chamados que 240 dos 248 itens mapeados. Vale
+decidir se entra num próximo recorte.
+
+## Ninguém configurou conversacional nesta instância
+
+Os campos existem e estão vazios: **zero** itens com
+`make_item_non_conversational` ou `turn_off_nowassist_conversation` marcados
+nos 759 do catálogo, **9** `conversational_label` preenchidos na instância
+inteira (1 no recorte, de 2.982 variáveis) e **nenhum** `topic_block`.
+
+Ou seja: a IA da ServiceNow ainda não foi habilitada para pedir estes itens,
+e não é por decisão registrada — é por nunca ter sido configurado.
+
+## O que mais atrapalha o conversacional, em volume
+
+| Achado | Quantidade |
+|---|---|
+| UI policies com `on_load=true` (a doc pede evitar) | 1.756 de 1.761 |
+| Variáveis do tipo Anexo | 309 |
+| Variáveis com reference qualifier | 326 |
+| Client scripts sem **VA Supported** | 88 de 986 |
+| Variáveis do tipo Personalizado / com rótulo | 56 + 9 |
+| Variáveis com widget de portal | 62 |
+| Itens com mais de 20 perguntas (limite de render inline) | 38 |
+| Variáveis com UI Macro | 22 |
+
+O maior item tem **161 variáveis** (`Seguro de Vida Complementar`) — oito
+vezes o limite em que a VA deixa de conversar e abre janela.
+
 ## Coisas boas que vale preservar
 
 - **PTP** é o único que valida CPF/CNPJ de verdade, e com saída antecipada
