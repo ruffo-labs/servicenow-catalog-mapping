@@ -69,8 +69,23 @@ export function shapeRecord(record, fields, { dictionary = {}, labels = [], list
  * O texto é preenchido na fase de enriquecimento por LLM; o script cru NÃO
  * entra no JSON final (decisão do contrato — é levantamento, não backup).
  */
-export function scriptSlot(rawScript) {
-  return rawScript ? { script_understanding: null } : '';
+export function scriptSlot(rawScript, { withSource = false } = {}) {
+  if (!rawScript) return '';
+  // `source` so entra quando quem executa pede (--with-source): levantamento para migracao.
+  return withSource ? { script_understanding: null, source: rawScript } : { script_understanding: null };
+}
+
+/**
+ * Script sem codigo: so comentario, ou o stub `function onCondition() {}` que o
+ * ServiceNow grava em toda UI policy, ou o comentario-modelo do `save_script`.
+ * Medido num levantamento real: mais de 90% das ocorrencias de script eram isso.
+ */
+export function isBlankScript(raw) {
+  const code = String(raw ?? '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    .replace(/function\s+onCondition\s*\(\s*\)\s*\{\s*\}/g, '');
+  return code.trim() === '';
 }
 
 /**

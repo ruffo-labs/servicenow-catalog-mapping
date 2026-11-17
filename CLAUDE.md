@@ -93,6 +93,11 @@ record producer, user criteria.
 
 Regras completas e exemplos: `docs/script-understanding.md`.
 
+**Exceção, só por pedido do usuário:** `extract.js --with-source` grava também o
+código (`source`) ao lado do `script_understanding`, para levantamento de
+migração. Sem a flag o script cru continua fora. Só o usuário liga; não ligue
+por conta própria.
+
 ---
 
 ## Orientações de trabalho (decisões tomadas com o usuário)
@@ -216,6 +221,11 @@ amostrar os N mais recentes (`--runtime N`).
 ## Objetos da tabela destino (notificações, SLA/OLA, reports, portais)
 
 Não pertencem ao item — pertencem à **tabela** onde o record producer grava.
+**Catalog item comum (sem `table_name`) usa sempre `sc_req_item`** — decisão do
+usuário, sem descoberta. Ela é do catálogo inteiro: a coleta traz o que vale
+para todo RITM da instância, e o vínculo fino com o levantamento é o
+`cited_items[]` (a tabela traz centenas de definições; só uma fração cita os itens). Nesse caso o
+recorte **não** sobe para tabelas de tarefa e `sc_task` fica de fora.
 Saem num arquivo irmão, `related-map.json`, em coleções de topo. Roda depois
 do `extract.js`, lendo o `catalog-map.json` pronto:
 
@@ -228,7 +238,7 @@ node scripts/merge-related.js out/<fatia>                                    # o
 | Coleção | Tabela | Campo de ligação |
 |---|---|---|
 | `notifications[]` | `sysevent_email_action` | `collection` |
-| `slas[]` (SLA **e** OLA, separados por `type`) | `contract_sla` | `collection` |
+| `slas[]` (SLA, OLA **e** Underpinning contract, separados por `type`; ver `docs/sla.md`) | `contract_sla` | `collection` |
 | `reports[]` | `sys_report` | `table` |
 | `portals[]` | `sp_portal` | **nenhum** — via `m2m_sp_portal_catalog`, por catálogo |
 
@@ -250,6 +260,38 @@ Condições de notificação, SLA e report citam o sys_id do item direto
 (`item=6819789d...`): `cited_items[]` e os `<campo>_label` resolvem isso para
 nome. É o vínculo fino — a tabela diz "vale para os 148 itens", o
 `cited_items` diz para quais. Detalhes: `docs/related-objects.md`.
+
+## `reference_choices` — opções de variável que aponta para outra tabela (por ambiente)
+
+Variável que referencia `service_offering` (por `reference` ou `lookup_table`) tem
+as opções resolvidas **por item**, não no variable set: o set é compartilhado, a
+lista não. Saem em `itens[].reference_choices`.
+
+**É regra por ambiente** (`INSTANCE_RULES` em `src/catalog/referenceChoices.js`,
+chaveada pelo host). A ligação opção → item só é conhecida onde alguém a mapeou.
+Ambiente sem entrada **não ganha a chave** e sai como antes. Para valer em outro
+host: achar, no dicionário **daquele** ambiente, o campo da tabela referenciada
+que guarda os itens (Glide List) e acrescentar a entrada. Não copie o campo de
+outro host — o de ligação é do ambiente.
+
+De onde saem as opções é decidido **por variável**, pelo `use_reference_qualifier`:
+
+| Modo | Opções | `link` |
+|---|---|---|
+| `simple` (filtro legível em `reference_qual`) | executa o **filtro declarado** na variável | `reference_qual` — certeza |
+| `advanced` (script), `dynamic`, nenhum | registros cujo campo de ligação do ambiente (Glide List) contém o item | o nome do campo — candidato |
+
+Cuidados:
+- **O qualificador em script não é lido** (DIRETRIZ #3). O `link` com o nome do
+  campo é a regra do ambiente aplicada ao item, **não** o resultado do que o
+  usuário vê: entram também ofertas desativadas e não operacionais
+  (`operational_status_label`). Meça a fração antes de afirmar o que o formulário
+  mostra.
+- **Na `service_offering` não use `queryAll` nem a Aggregate API** — podem errar em
+  silêncio (ver `docs/table-api.md`). A coleta usa offset e confere o
+  `X-Total-Count`; se não bater, estoura em vez de seguir com dado incompleto.
+
+Contrato: `docs/output-schema.md`.
 
 ## Volume de chamados e conversacional (dois blocos dentro do item)
 
@@ -432,6 +474,7 @@ src/catalog/fulfillment.js # flows, workflows e execução real
 src/catalog/related.js     # notificacoes, SLA/OLA, reports e portais da tabela destino
 src/catalog/volume.js      # chamados por item (Aggregate API, 3 janelas)
 src/catalog/conversational.js # avaliacao de item conversacional (VA / Now Assist)
+src/catalog/referenceChoices.js # opcoes de variavel que aponta para outra tabela (regra por ambiente)
 scripts/extract.js        # fase 1
 scripts/extract-related.js       # objetos da tabela destino
 scripts/next-batch.js     # fase 2 — corta o próximo lote
@@ -450,6 +493,7 @@ scripts/selftest.js       # testa a transformação sem rede
 | `docs/output-schema.md` | contrato do JSON, campo a campo |
 | `docs/fulfillment.md` | flows, workflows, triggers e execução real |
 | `docs/related-objects.md` | notificações, SLA/OLA, reports e portais |
+| `docs/sla.md` | estrutura de SLA/OLA/Underpinning contract e limites do mapeamento |
 | `docs/conversational.md` | critérios de item conversacional (VA / Now Assist) |
 | `docs/script-understanding.md` | como escrever as explicações |
 | `docs/table-api.md` | Table API, paginação e armadilhas |

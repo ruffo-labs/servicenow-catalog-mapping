@@ -29,6 +29,7 @@ em prosa (`script_understanding`).
 | Saber o formato do JSON | [`docs/output-schema.md`](docs/output-schema.md) |
 | Entender flows e workflows | [`docs/fulfillment.md`](docs/fulfillment.md) |
 | Mapear notificações, SLA/OLA, reports e portais | [`docs/related-objects.md`](docs/related-objects.md) |
+| Entender a estrutura de SLA, OLA e seus limites no mapa | [`docs/sla.md`](docs/sla.md) |
 | Saber se o item serve para a IA pedir | [`docs/conversational.md`](docs/conversational.md) |
 | Escrever `script_understanding` | [`docs/script-understanding.md`](docs/script-understanding.md) |
 | Saber quanto custa em token | [`docs/token-economics.md`](docs/token-economics.md) |

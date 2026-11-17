@@ -29,7 +29,25 @@ export const VARIABLE_FIELDS = [
   // Conversacional: rotulo que a VA le no lugar da pergunta, exclusao da
   // interface conversacional, e o Topic Block que destrava tipo Personalizado.
   'conversational_label', 'not_available_conversation', 'topic_block',
+  // Configuradores. Em Container Start/Split/End e Break e aqui que mora o
+  // layout (colunas), o titulo e a largura; nas demais, ajuda, mascara, regex,
+  // qualificador e visibilidade por contexto. Todos conferidos no sys_dictionary
+  // (question > item_option_new).
+  'layout', 'display_title', 'variable_width', 'visibility', 'attributes',
+  'show_help', 'show_help_on_load', 'help_text', 'instructions', 'tooltip', 'rich_text',
+  'unique', 'validate_regex', 'do_not_select_first', 'scale_min', 'scale_max', 'list_table',
+  'use_reference_qualifier', 'dynamic_ref_qual', 'use_dynamic_default', 'dynamic_default_value',
+  'default_html_value', 'mask_use_confirmation', 'mask_use_encryption',
+  'visible_standalone', 'visible_summary', 'visible_guide', 'visible_bundle', 'hide_on_grid',
+  'read_roles', 'write_roles', 'create_roles',
+  // Scripts da variavel. Entram so como `script_understanding` (DIRETRIZ #3):
+  // o build.js troca o texto cru pelo slot.
+  'read_script', 'post_insert_script', 'save_script',
+  'sys_created_on', 'sys_created_by', 'sys_updated_on', 'sys_updated_by',
 ];
+
+/** Dos campos de VARIABLE_FIELDS, os que sao script. O cru nunca sai no JSON. */
+export const VARIABLE_SCRIPT_FIELDS = ['read_script', 'post_insert_script', 'save_script'];
 
 export const CHOICE_FIELDS = ['question', 'text', 'value', 'order', 'inactive', 'sys_id'];
 
@@ -38,6 +56,7 @@ export const SET_LINK_FIELDS = ['order', 'sc_cat_item', 'sys_id', 'variable_set'
 export const SET_FIELDS = [
   'description', 'display_title', 'internal_name', 'layout', 'name', 'order',
   'sys_class_name', 'sys_id', 'title', 'type',
+  'set_attributes', 'read_roles', 'write_roles', 'create_roles',
 ];
 
 export const UI_POLICY_FIELDS = [
@@ -45,12 +64,17 @@ export const UI_POLICY_FIELDS = [
   'applies_target_record', 'applies_to', 'catalog_conditions', 'catalog_item',
   'isolate_script', 'on_load', 'order', 'short_description', 'sys_class_name',
   'sys_id', 'ui_type', 'va_supported', 'variable_set',
+  'description', 'global', 'inherit', 'reverse_if_false', 'run_scripts', 'view',
+  // Os dois scripts da policy entram so como `script_understanding` (build.js).
+  'script_true', 'script_false',
+  'sys_created_on', 'sys_created_by', 'sys_updated_on', 'sys_updated_by',
 ];
 
 export const UI_POLICY_ACTION_FIELDS = [
   'catalog_item', 'catalog_variable', 'cleared', 'disabled', 'mandatory',
   'order', 'sys_class_name', 'sys_id', 'sys_name', 'ui_policy', 'value',
   'value_action', 'variable', 'variable_set', 'visible',
+  'field_message', 'field_message_type',
 ];
 
 export const CLIENT_SCRIPT_FIELDS = [
@@ -58,6 +82,8 @@ export const CLIENT_SCRIPT_FIELDS = [
   'applies_sc_task', 'applies_target_record', 'applies_to', 'cat_item',
   'cat_variable', 'condition', 'field', 'isolate_script', 'name', 'script',
   'sys_id', 'sys_policy', 'type', 'ui_type', 'va_supported', 'variable_set',
+  'description', 'order', 'messages', 'global', 'view',
+  'sys_created_on', 'sys_created_by', 'sys_updated_on', 'sys_updated_by',
 ];
 
 export const UC_LINK_FIELDS = ['sc_cat_item', 'sys_class_name', 'sys_id', 'user_criteria'];
@@ -65,6 +91,7 @@ export const UC_LINK_FIELDS = ['sc_cat_item', 'sys_class_name', 'sys_id', 'user_
 export const USER_CRITERIA_FIELDS = [
   'active', 'advanced', 'company', 'department', 'group', 'location',
   'match_all', 'name', 'role', 'script', 'sys_id', 'sys_name', 'user',
+  'sys_created_on', 'sys_created_by', 'sys_updated_on', 'sys_updated_by',
 ];
 
 /** Campos Glide List: multi-valor, tratados por `snList`. */
@@ -120,6 +147,31 @@ export const PORTAL_FIELDS = [
 ];
 
 export const PORTAL_CATALOG_FIELDS = ['sys_id', 'sp_portal', 'sc_catalog', 'active', 'order'];
+
+/**
+ * `service_offering` — opcoes de variaveis que apontam para ela (`reference_choices`).
+ * Usada so em instancia com regra propria (ver referenceChoices.js). Todos os
+ * nomes conferidos no sys_dictionary da Assai QA; `sla`/`u_ola_*` apontam para a
+ * DEFINICAO de SLA, `u_flow*` para o Flow, `u_user_criteria` para o acesso.
+ */
+export const SERVICE_OFFERING_FIELDS = [
+  'sys_id', 'name', 'number', 'short_description', 'description', 'parent',
+  'operational_status', 'install_status', 'used_for', 'u_area', 'u_order',
+  'support_group', 'managed_by_group', 'owned_by', 'managed_by',
+  'sla', 'u_ola_a', 'u_ola_r', 'u_flow', 'u_flow_task',
+  'u_has_approver', 'u_has_approver_group', 'u_approval_sequence', 'u_task_sequence',
+  'u_task_assign', 'u_auto_dispatch', 'u_automatic_cancellation',
+  'u_user_criteria', 'u_locations', 'u_elegivel', 'u_pdv_type', 'u_disable_view', 'u_grant_only',
+  'u_type_of_event', 'u_topics', 'u_type_ombudsman', 'u_finance_impact',
+  'u_categorias_dos_temas_report', 'u_grupo', 'u_grupo_tipo_de_ocorr_ncia_report',
+  'u_manager', 'u_request', 'u_incident', 'u_pdv', 'u_casino',
+  'u_catalog_item', 'u_catalog_items', 'sys_updated_on', 'sys_updated_by',
+];
+
+/** Glide Lists da `service_offering` (tipo `glide_list` no dicionario). */
+export const SERVICE_OFFERING_LIST_FIELDS = new Set([
+  'u_catalog_items', 'u_user_criteria', 'u_locations', 'u_elegivel', 'u_pdv_type',
+]);
 
 /** Glide Lists das tabelas relacionadas — por tabela, para nao contaminar o resto. */
 export const RELATED_LIST_FIELDS = new Set(['recipient_users', 'recipient_groups']);

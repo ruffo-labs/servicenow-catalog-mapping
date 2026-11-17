@@ -103,7 +103,7 @@ Merge feito — nenhuma entrada foi alterada
   variable_sets    ${merged.variable_sets.length}
   user_criteria    ${merged.user_criteria.length}
   notifications    ${merged.notifications.length}   (${t.notifications_active ?? '?'} ativas)
-  slas             ${merged.slas.length}   (${t.sla ?? '?'} SLA + ${t.ola ?? '?'} OLA)
+  slas             ${merged.slas.length}   (${merged.slas.filter((s) => s.type === 'SLA').length} SLA + ${merged.slas.filter((s) => s.type === 'OLA').length} OLA + ${merged.slas.filter((s) => s.type !== 'SLA' && s.type !== 'OLA').length} outro tipo)
   reports          ${merged.reports.length}
   portals          ${merged.portals.length}
 `);

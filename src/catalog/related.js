@@ -24,6 +24,9 @@ export const RELATED_TABLES = {
   m2m_sp_portal_catalog: F.PORTAL_CATALOG_FIELDS,
 };
 
+/** Tabela do chamado gerado por catalog item comum (decisao do usuario: sempre esta). */
+export const CATALOG_ITEM_TABLE = 'sc_req_item';
+
 /** Campo que liga cada tabela a uma tabela de negocio — lido do dicionario, nao chutado. */
 const LINK_FIELD = {
   sysevent_email_action: 'collection',
@@ -43,31 +46,35 @@ const LINK_FIELD = {
 export async function discoverScope(api, map, log = () => {}) {
   const itemsByTable = new Map();
   for (const it of map.itens ?? []) {
-    const t = typeof it.table_name === 'string' ? it.table_name : '';
-    if (!t) continue;
+    // Catalog item comum (sem table_name) gera RITM: a tabela e sempre sc_req_item.
+    const t = typeof it.table_name === 'string' && it.table_name ? it.table_name : CATALOG_ITEM_TABLE;
     if (!itemsByTable.has(t)) itemsByTable.set(t, []);
     itemsByTable.get(t).push({ sys_id: it.sys_id, name: it.name });
   }
   const caseTables = [...itemsByTable.keys()].sort();
-  if (!caseTables.length) {
-    throw new Error('O catalog-map.json informado nao tem item com table_name — sao todos catalog item comum?');
-  }
+  if (!caseTables.length) throw new Error('O catalog-map.json informado nao tem itens.');
   log(`tabelas de caso vindas do mapeamento: ${caseTables.length}`);
 
+  // A expansao para tabelas de tarefa so vale para tabelas destino de record
+  // producer (app proprio). `sc_req_item` e do catalogo inteiro: expandir pelo
+  // escopo dela traria as tarefas de toda a plataforma.
+  const scopeTables = caseTables.filter((t) => t !== CATALOG_ITEM_TABLE);
   const scopes = new Map();
-  for (const t of caseTables) {
+  for (const t of scopeTables) {
     const { records } = await api.query('sys_db_object', { query: `name=${t}`, fields: ['sys_scope'], limit: 1 });
     const id = v(records[0]?.sys_scope);
     if (id) scopes.set(id, d(records[0]?.sys_scope) || id);
   }
-  log(`escopos de aplicacao: ${[...scopes.values()].join(', ')}`);
+  log(scopes.size ? `escopos de aplicacao: ${[...scopes.values()].join(', ')}` : 'sem escopo a expandir (so sc_req_item)');
 
   // Todas as tabelas desses escopos; a heranca e resolvida em memoria para nao
   // pagar uma ida por tabela.
-  const rows = await api.queryAll('sys_db_object', {
-    query: `sys_scopeIN${[...scopes.keys()].join(',')}`,
-    fields: ['sys_id', 'name', 'label', 'super_class', 'sys_scope'],
-  });
+  const rows = scopes.size
+    ? await api.queryAll('sys_db_object', {
+      query: `sys_scopeIN${[...scopes.keys()].join(',')}`,
+      fields: ['sys_id', 'name', 'label', 'super_class', 'sys_scope'],
+    })
+    : [];
   const byName = new Map(rows.map((r) => [v(r.name), r]));
   const parentName = new Map();
   for (const p of await fetchByIds(api, 'sys_db_object', uniq(rows.map((r) => v(r.super_class))), ['sys_id', 'name'])) {
@@ -316,6 +323,9 @@ export function buildRelated(collected, dictionaries, scope, { sourceMap = '' } 
       notifications_active: notifications.filter((n) => n.active === 'true').length,
       sla: slas.filter((s) => s.type === 'SLA').length,
       ola: slas.filter((s) => s.type === 'OLA').length,
+      // `type` tem um terceiro valor, `Underpinning contract`. Sem esta conta o
+      // total de `slas[]` nao fecha com SLA + OLA.
+      other: slas.filter((s) => s.type !== 'SLA' && s.type !== 'OLA').length,
       reports: reports.length,
       portals: portals.length,
       // Quantos citam um item do levantamento na condicao — o vinculo fino,

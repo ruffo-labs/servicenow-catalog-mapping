@@ -177,6 +177,32 @@ O cache é por host, então trocar o `.env` de instância não reaproveita o
 dicionário errado. Depois de mexer na estrutura da instância (campo novo,
 tabela nova), rode com `--refresh-dict`.
 
+## ARMADILHA: `service_offering` — keyset e Aggregate dão resposta errada em silêncio
+
+Medido numa instância (2026-10-15), na `service_offering`: o `X-Total-Count` e a
+paginação por offset concordam entre si, e as outras duas leituras divergem **sem
+erro**:
+
+| Leitura | Resultado | Certo? |
+|---|---|---|
+| Aggregate API, sem filtro | contagem de poucos registros, contra milhares | **não** |
+| Aggregate API, filtro por campo de ligação | 1, quando a Table API traz 12 | **não** |
+| `queryAll` (keyset), sem filtro | menos de um quinto dos `sys_id` únicos | **não** |
+| `queryAll` (keyset), filtro com ~700 registros | linhas repetidas e `sys_id` únicos abaixo do total | **não** |
+| Offset + `ORDERBYsys_id` | linhas = `sys_id` únicos = `X-Total-Count` | sim |
+
+O keyset só funciona quando o resultado cabe numa página (`records.length < size`
+encerra antes de usar o cursor) — por isso uma consulta de 12 linhas sai certa e
+uma de centenas sai errada. **Não foi investigada a causa.** Só a
+`service_offering` foi observada assim; `sc_cat_item`, `sc_req_item` e
+`sysevent_email_action` bateram com a Aggregate. **Outras tabelas CMDB não foram
+testadas — trate como suspeitas, não como defeituosas.**
+
+**Regra:** numa tabela que ainda não foi conferida, leia por offset e compare com o
+`X-Total-Count` antes de confiar em `queryAll` ou na Aggregate. Para a
+`service_offering`, `referenceChoices.js` faz isso e **estoura** se o total lido
+não bater. O `queryAll` global **não** foi alterado.
+
 ## ARMADILHA: `^NQ` quebra a paginação por keyset
 
 `^NQ` (new query) cria **grupos independentes** na encoded query — é um OR de

@@ -53,6 +53,11 @@ Filtros:
                             registros recentes por item; padrao 50, desligado sem a flag)
   --volume                  conta os chamados ja abertos por item (Aggregate API, 3 janelas:
                             total, 12 meses, 90 dias). Exato e barato; 0 token
+  --with-source             grava tambem o codigo do script (campo source) ao lado do
+                            script_understanding. Fora da DIRETRIZ #3 padrao: so por pedido
+                            do usuario, para migracao. Sem a flag o script cru nao sai
+  --reuse <catalog-map.json>  flow, workflow e volume vem deste mapa anterior (0 chamadas);
+                            estoura se a query trouxer item que nao esta nele
   --refresh-dict            ignora o cache de dicionario e rele da instancia
   --out <dir>               padrao: out/
 `);
@@ -150,7 +155,8 @@ Confira a lista acima. Para mapear estes ${pre.total} item(ns), repita o comando
   const runtimeSample = args.runtime === true ? 50
     : typeof args.runtime === 'string' ? Math.max(1, Number.parseInt(args.runtime, 10) || 50)
     : 0;
-  const collected = await collect(api, filter, log, { runtimeSample, volume: Boolean(args.volume) });
+  const reuse = typeof args.reuse === 'string' ? JSON.parse(readFileSync(resolve(process.cwd(), args.reuse), 'utf8')) : undefined;
+  const collected = await collect(api, filter, log, { runtimeSample, volume: Boolean(args.volume), reuse });
 
   if (!collected.items.length) {
     console.log('\nNenhum item bateu com o filtro. Confira o filtro e as permissoes de leitura.');
@@ -158,7 +164,7 @@ Confira a lista acima. Para mapear estes ${pre.total} item(ns), repita o comando
     return;
   }
 
-  const { json, pendingScripts, scriptIndex } = build(collected, dictionaries);
+  const { json, pendingScripts, scriptIndex } = build(collected, dictionaries, { withSource: Boolean(args['with-source']) });
 
   // Cache por hash: script identico (copia-e-cola) ou rodada repetida nao volta pro LLM.
   const cachePath = resolve(process.cwd(), '.cache/script-understandings.json');

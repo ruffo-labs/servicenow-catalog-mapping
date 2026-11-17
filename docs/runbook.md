@@ -22,6 +22,27 @@ usa `workflow` ou `flow_designer_flow`.
 **Leia a contagem por tabela.** A Table API filtra por ACL **em silêncio** — se
 `sc_cat_item` vier com 12 e você sabe que tem 800, é permissão, não filtro.
 
+### Trocou o `.env` para outra instância? Confira isto
+
+1. **Leia a linha `Instância:` do `test-connection`.** O cache de dicionário e a
+   regra de `reference_choices` são chaveados pelo host; trocar o `.env` sem olhar
+   é como se mapeia o ambiente errado com a regra do outro.
+2. **`--refresh-dict` na primeira rodada com uma lista de campos nova.** O cache
+   guarda o dicionário inteiro, mas os avisos de "campo inexistente" são gravados
+   uma vez; campo acrescentado depois passa sem aviso.
+3. **`reference_choices` só sai onde há regra** em `INSTANCE_RULES`. Sem entrada,
+   o item sai sem a chave — não é falha. Para criar a regra, ver o `CLAUDE.md`.
+4. **Reaproveitar mapa antigo (`--reuse`, `related-map`) congela o dado.** Conte de
+   novo antes (`extract-related.js` sem `--confirm`); definição de SLA, notificação
+   e report mudam o tempo todo, e o `--reuse` só estoura para item que sumiu do
+   mapa, não para dado que envelheceu.
+5. **SLA — duas conferências de uma chamada** (detalhe em `docs/sla.md`): se há
+   `contract_sla` com `collection` numa tabela **pai** da do recorte (`task`), a
+   coleta, que casa `collection` por igualdade, não pega; e se o total de `slas[]`
+   fecha com SLA + OLA + o terceiro `type`.
+6. **O cache de explicações de script é global**, por hash: script igual em outro
+   ambiente não volta para o LLM.
+
 ## 1. Descobrir o filtro (opcional)
 
 ```bash
@@ -61,7 +82,9 @@ Flags úteis:
 |---|---|
 | `--runtime [N]` | confirma fulfillment com execução real (N registros recentes por item; padrão 50). Sem a flag, só o estático |
 | `--volume` | conta os chamados já abertos por item (total, 12m, 90d). Exato, via Aggregate API, 0 token |
-| `--out <dir>` | separa a saída por fatia (`out/tax`, `out/ptp`...) |
+| `--with-source` | grava também o **código** de cada script (`source`) ao lado do `script_understanding`. Sai da DIRETRIZ #3 padrão — só quando o usuário pede (levantamento para migração). Aumenta o JSON de forma sensível |
+| `--reuse <catalog-map.json>` | flow, workflow e volume vêm desse mapa anterior, sem reler a instância. Estoura se a query trouxer item que não está nele. O `related-map` (SLA, OLA, notificação, reports, portais) é reaproveitado sem flag: o `merge-related` pega o mais recente da pasta |
+| `--out <dir>` | separa a saída por fatia (`out/tax`, `out/ptp`...). **Também no `next-batch.js`** (`--out out/<fatia>`): sem ela ele olha `out/` e pode achar fila de outro levantamento |
 | `--refresh-dict` | relê o dicionário da instância (use depois de mudança de estrutura) |
 | `--help` | os demais filtros (`--catalog`, `--category`, `--name`, `--sys-id`, `--kind`) |
 
@@ -78,6 +101,11 @@ node scripts/extract-related.js --out out/consolidado --confirm  # coleta
 Sem `--confirm` mostra o recorte (tabelas e contagens) para conferência. O
 recorte inclui as tabelas de **tarefa** do mesmo escopo, porque é onde moram
 os OLA. Sai em `related-map.json`. Ver `docs/related-objects.md`.
+
+Para **catalog item comum** (sem `table_name`) a tabela é sempre `sc_req_item` e
+o recorte não sobe para tarefas. Como `sc_req_item` é de todo o catálogo, a maior
+parte do que vem é genérico; filtre por `cited_items[]` para achar o que cita os
+itens levantados.
 
 > **Rode isto ANTES da fase 2.** O `extract-related` regrava o
 > `related-map.json` com os scripts em branco; se ele vier depois do
@@ -199,3 +227,6 @@ No fim, rode a query completa para o consolidado. Com o cache cheio isso sai por
 | Resposta HTML em vez de JSON | sessão inválida ou usuário sem `snc_platform_rest_api_access`. O cliente converte em `ServiceNowError` |
 | Contagens baixas demais | ACL. A Table API filtra em silêncio |
 | `0 execuções` com muitos registros | campo de volta pode estar numa tabela PAI — ver a regra de herança no `CLAUDE.md` |
+| `next-batch.js` diz "todos já foram explicados" logo depois de uma rodada nova | faltou `--out <fatia>`: sem ela ele olha `out/` e acha a fila de outro levantamento |
+| Total de `slas[]` maior que SLA + OLA | o terceiro `type`, `Underpinning contract` — ver `docs/sla.md` |
+| Edição por script (`replace` em Node) "não aplica" e não dá erro | arquivos do projeto têm fim de linha CRLF e a string de busca com `\n` não casa; use a ferramenta de edição, ou normalize o fim de linha antes |

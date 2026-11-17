@@ -33,9 +33,38 @@ existe, mas é só o catálogo *padrão* do portal — na instância da Natura e
 preenchido em 4 dos 42 portais e em nenhum dos catálogos mapeados. Usar só ele
 devolveria zero portal.
 
+## Catalog item comum: a tabela é sempre `sc_req_item`
+
+Decisão do usuário: **item sem `table_name` (catalog item, não record producer)
+gera RITM, então a tabela de ligação é sempre `sc_req_item`.** Não há tabela
+destino a descobrir. O `extract-related.js` faz isso sozinho; um mapa só de
+catalog items deixou de ser erro.
+
+Duas consequências, medidas num levantamento só de catalog items:
+
+1. **O recorte não sobe para tabelas de tarefa.** A expansão "tudo que estende
+   `task` no mesmo `sys_scope`" vale para tabelas destino de record producer, que
+   moram num app próprio. `sc_req_item` é do catálogo inteiro da plataforma;
+   expandir pelo escopo dela traria as tarefas de tudo. Quando o mapa mistura
+   producers e catalog items, `sc_req_item` entra na lista mas **não** define
+   escopo — só os destinos dos producers definem.
+2. **`sc_req_item` é compartilhada por todos os catálogos da instância.** A
+   coleta traz tudo que está ligado à tabela, não só o que fala dos itens
+   mapeados. A coleção sai com centenas de notificações e SLA e milhares de
+   reports, e **só uma fração cita** algum dos itens na condição. O resto vale
+   para todo RITM da instância. Para saber o que é específico do levantamento,
+   filtre por `cited_items[]` (ver abaixo) — e leia a ressalva em `docs/sla.md`
+   seção 4: `cited_items` vazio não prova que a definição não vale para o item.
+
+**O que fica de fora por decisão:** `sc_task` (a tarefa do RITM) e `sc_request`
+não entram. Se um dia o OLA de tarefa for necessário, é ampliar `caseTables` em
+`discoverScope`, não coletar à mão. Conte antes (`contract_sla` com
+`collection=sc_task`) para saber se vale a pena.
+
 ## O recorte: por que entram as tabelas de tarefa
 
-As tabelas destino saem dos `table_name` dos record producers mapeados. Só que:
+Vale para **record producers**. As tabelas destino saem dos `table_name` dos
+record producers mapeados. Só que:
 
 > **O SLA mede o caso; o OLA mede a tarefa.**
 
@@ -104,8 +133,10 @@ por tabela e tipo, porque é como a instância guarda.
 
 Não tem script: o comportamento está nas condições, que são encoded query.
 
-Nesta instância **as 858 definições apontam para `flow` (Flow Designer) e
-nenhuma para `workflow` legado** — o oposto do que acontece nos itens.
+**Qual motor a instância usa varia**: numa, todas as definições em `flow` (Flow
+Designer); noutra, quase todas em `workflow` legado. Não assuma. Estrutura
+completa, valores dos choices, o terceiro `type` (`Underpinning contract`) e os
+limites do vínculo com o item: `docs/sla.md`.
 
 ## `reports[]` — `sys_report`
 

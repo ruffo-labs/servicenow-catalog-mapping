@@ -79,7 +79,7 @@ async function main() {
     console.log(`${marca} ${r.table.padEnd(52)} ${String(r.items).padStart(5)} ${String(r.notifications).padStart(6)} ${String(r.sla).padStart(5)} ${String(r.ola).padStart(5)} ${String(r.reports).padStart(7)}`);
   }
   console.log(`  ${'TOTAL'.padEnd(52)} ${String(sum('items')).padStart(5)} ${String(sum('notifications')).padStart(6)} ${String(sum('sla')).padStart(5)} ${String(sum('ola')).padStart(5)} ${String(sum('reports')).padStart(7)}`);
-  console.log(`\n  (*) tabela destino de record producer mapeado; as demais sao tarefas do mesmo escopo`);
+  console.log(`\n  (*) tabela dos itens mapeados (destino de record producer, ou sc_req_item para catalog item comum); as demais sao tarefas do mesmo escopo`);
 
   if (!args.confirm) {
     console.log(`\nConfira o recorte acima. Para coletar, repita com --confirm.\n`);
@@ -122,6 +122,7 @@ Resultado
   notificacoes        ${t.notifications}   (${t.notifications_active} ativas)
   SLA                 ${t.sla}
   OLA                 ${t.ola}
+  outro tipo          ${t.other}   (Underpinning contract)
   reports             ${t.reports}
   portais             ${t.portals}
   chamadas HTTP       ${api.client.requestCount}

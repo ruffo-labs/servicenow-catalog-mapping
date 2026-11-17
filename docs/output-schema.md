@@ -127,6 +127,57 @@ Sempre presente. **Avaliação**, não campo da instância: separa
 (regra aplicada sobre critérios publicados pela ServiceNow). Campo a campo e
 fontes em `docs/conversational.md`.
 
+## `itens[].reference_choices` — opções de variável que aponta para outra tabela
+
+**Só existe em instância com regra própria** (`INSTANCE_RULES` em
+`src/catalog/referenceChoices.js`, chaveada pelo host). Nas demais a chave **não
+aparece** e o item sai como sempre saiu.
+
+Por que fica no item e não no `variable_set`: o set é compartilhado (um mesmo set
+entra em dezenas de itens), mas as opções dependem do item que o usa. A variável
+continua no set; a lista de opções sai aqui. Itens sem variável apontando para a
+tabela saem com `[]`.
+
+`<campo>` abaixo é o campo de ligação da regra do ambiente (Glide List da tabela
+referenciada que guarda os itens).
+
+```json
+"reference_choices": [{
+  "reference_table": "service_offering",
+  "link": "<campo>",
+  "qualifier_mode": "advanced",
+  "filter": "<campo>LIKE<sys_id do item>",
+  "variables": [{
+    "name": "service_offering", "sys_id": "...",
+    "origin": "variable_set",
+    "variable_set": { "_display_value": "<título do set>", "__text": "..." },
+    "reference_qual": "javascript:..."
+  }],
+  "total": 12,
+  "options": [{ "sys_id": "...", "number": "...", "name": "...",
+                "operational_status": "1", "operational_status_label": "...", "...": "..." }]
+}]
+```
+
+| Campo | O que é |
+|---|---|
+| `qualifier_mode` | o `use_reference_qualifier` da variável: `simple` (filtro legível em `reference_qual`), `advanced` (script), `dynamic` ou `none` |
+| `link` | **grau de confiança**, como no fulfillment. `reference_qual` = o filtro **declarado na variável** foi executado (certeza). o nome do campo de ligação = regra do ambiente aplicada ao item (**candidato**) |
+| `filter` | a encoded query que foi lida: o filtro declarado, ou `<campo>LIKE<item>` |
+| `variables[]` | as variáveis (do item ou de set) que apontam para a tabela, por `reference` ou `lookup_table`; `origin` diz de onde vêm. Variáveis do mesmo item com origens de opção diferentes saem em blocos separados |
+| `variables[].reference_qual` | o qualificador **como declarado**. Quando é script, **não foi lido**: a lista que o usuário vê pode ter filtros a mais que o campo de ligação |
+| `options[]` | os registros da tabela. Entram **todos** os ligados ao item, inclusive os desativados — `operational_status` e `_label` permitem filtrar (os valores do choice variam por instância; o rótulo sai do próprio registro) |
+
+Campos de `options[]`: ver `SERVICE_OFFERING_FIELDS` em `src/catalog/fields.js`
+(identificação, status, grupos, `sla`/`u_ola_a`/`u_ola_r`, `u_flow`/`u_flow_task`,
+aprovação, `u_user_criteria`, flags e os dois vínculos com o item). A lista é
+validada contra o `sys_dictionary` a cada rodada.
+
+**Lista, não referência única:** ao escolher o campo de ligação de um ambiente,
+confira se existe a versão em lista e a versão única. A lista é o vínculo mais
+geral — ofertas ligadas a mais de um item, lista vazia e referência única fora da
+lista aparecem. Meça os três casos antes de decidir.
+
 ## Coleções da tabela destino (arquivo irmão)
 
 Notificações, SLA/OLA, reports e portais **não** entram em `itens[]`: eles
@@ -174,6 +225,43 @@ Ou seja, o pipeline tem duas fases — **extrair** da Table API e depois
 - `itens[].catalog_client_script[].script`
 - `variable_sets[].vc_catalog_client_scripts[].script`
 - `user_criteria[].script`
+- `catalog_ui_policies[].script_true` e `script_false` (itens e `variable_sets[].vs_ui_policies[]`)
+- `catalog_variables[].read_script`, `post_insert_script` e `save_script` (itens e `vs_variables[]`)
+
+**Script sem código vira `""`** em variável e UI policy: só comentário, o stub
+`function onCondition() {}` ou o comentário-modelo do `save_script`. Num
+levantamento real, mais de 90% das ocorrências desses dois campos eram isso — sem
+o corte, cada variável e cada policy carregaria um slot sem lógica. Client script e user criteria não passam por esse corte.
+
+**Com `--with-source`** (pedido do usuário, para migração) o slot ganha o código:
+
+```json
+"script": { "script_understanding": "explicação...", "source": "function onChange(...) { ... }" }
+```
+
+`source` só existe nos slots de script do catálogo. As `advanced_condition` das
+notificações, que vêm do `related-map`, não têm `source`.
+
+### Configuradores da variável
+
+`catalog_variables[]` e `vs_variables[]` trazem os campos de configuração lidos
+do dicionário (`question` > `item_option_new`):
+
+| Grupo | Campos |
+|---|---|
+| Layout (Container Start/Split/End, Pausa) | `layout` (`normal`, `2across`, `2down`), `display_title`, `variable_width`, `visibility` |
+| Ajuda e texto | `show_help`, `show_help_on_load`, `help_text`, `instructions`, `tooltip`, `rich_text`, `default_html_value` |
+| Validação | `unique`, `validate_regex`, `mask_use_confirmation`, `mask_use_encryption`, `do_not_select_first`, `scale_min`, `scale_max`, `list_table` |
+| Qualificador e default dinâmico | `use_reference_qualifier`, `dynamic_ref_qual`, `use_dynamic_default`, `dynamic_default_value` |
+| Onde aparece | `visible_standalone`, `visible_summary`, `visible_guide`, `visible_bundle`, `hide_on_grid` |
+| Acesso | `read_roles`, `write_roles`, `create_roles` |
+| Outros | `attributes` (Variable attributes) |
+
+O variable set ganha `set_attributes` e as três roles. Client script ganha
+`description`, `order`, `messages`, `global`, `view`; UI policy ganha
+`description`, `global`, `inherit`, `reverse_if_false`, `run_scripts`, `view`;
+a ação da policy ganha `field_message` e `field_message_type`. Variável, client
+script, UI policy e user criteria trazem `sys_created_on/by` e `sys_updated_on/by`.
 
 ## Estratégia de coleta
 

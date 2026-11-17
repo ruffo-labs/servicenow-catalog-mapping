@@ -163,7 +163,7 @@ export async function preview(api, query) {
  * Coleta tudo que o contrato precisa, em lote (uma chamada por tabela por lote
  * de 50 sys_ids, nao uma por item).
  */
-export async function collect(api = new TableApi(), filter = {}, log = () => {}, { runtimeSample = 0, volume = false } = {}) {
+export async function collect(api = new TableApi(), filter = {}, log = () => {}, { runtimeSample = 0, volume = false, reuse } = {}) {
   const itemQuery = buildItemQuery(filter);
   if (!itemQuery.trim()) {
     throw new Error('Query obrigatoria. Nao e permitido ler a sc_cat_item inteira sem filtro.');
@@ -220,15 +220,38 @@ export async function collect(api = new TableApi(), filter = {}, log = () => {},
   const userCriteria = await fetchByIds(api, 'user_criteria', criteriaIds, F.USER_CRITERIA_FIELDS);
   log(`user criteria em uso: ${userCriteria.length}`);
 
+  // `reuse`: catalog-map anterior. Flow, workflow e volume saem dele, sem reler a
+  // instancia — o mesmo dado de antes, nao uma medicao nova. Item que nao estava
+  // la estoura: o buraco sairia como "sem fulfillment", e e mentira.
+  const reused = reuse ? new Map(reuse.itens.map((i) => [i.sys_id, i])) : undefined;
+  if (reused) {
+    const faltam = items.filter((r) => !reused.has(rawValue(r.sys_id)));
+    if (faltam.length) {
+      throw new Error(`--reuse: ${faltam.length} item(ns) nao estao no mapa anterior (ex.: ${faltam.slice(0, 3).map((r) => rawValue(r.name)).join('; ')}).`);
+    }
+    log(`fulfillment e volume reaproveitados do mapa anterior (${reused.size} itens, 0 chamadas)`);
+  }
   const { collectFulfillment } = await import('./fulfillment.js');
-  const fulfillmentByItem = await collectFulfillment(api, items, { runtimeSample }, log);
+  const fulfillmentByItem = reused
+    ? new Map([...reused].map(([id, i]) => [id, { workflows: i.triggered_workflows ?? [], flows: i.triggered_flow_designers ?? [] }]))
+    : await collectFulfillment(api, items, { runtimeSample }, log);
+
+  // Opcoes de variaveis que apontam para outra tabela, resolvidas por item.
+  // So roda em instancia com regra propria; nas demais fica vazio e o item sai como antes.
+  const { rulesFor, collectReferenceChoices } = await import('./referenceChoices.js');
+  const referenceRules = rulesFor(api);
+  const referenceChoicesByItem = referenceRules.length
+    ? await collectReferenceChoices(api, referenceRules, { items, itemVariables, setVariables, setLinks }, log)
+    : undefined;
 
   // Volume de chamados: Aggregate API, contagem exata, 3 janelas. Opcional
   // porque agrupa a tabela destino inteira — barato, mas so faz sentido
   // quando o levantamento e para priorizar refatoracao.
   let volumeByItem;
   let volumeInfo;
-  if (volume) {
+  if (reused) {
+    volumeByItem = new Map([...reused].filter(([, i]) => i.volume).map(([id, i]) => [id, i.volume]));
+  } else if (volume) {
     const { collectVolume } = await import('./volume.js');
     const r = await collectVolume(api, items, log);
     volumeByItem = r.byItem;
@@ -237,6 +260,7 @@ export async function collect(api = new TableApi(), filter = {}, log = () => {},
 
   return {
     fulfillmentByItem,
+    referenceChoicesByItem,
     volumeByItem,
     volumeInfo,
     itemQuery,

@@ -4,8 +4,9 @@ import { resolve, dirname } from 'node:path';
 import { rawValue } from '../tableApi.js';
 import * as F from './fields.js';
 import { describeTable } from './collect.js';
-import { shapeRecord, snValue, scriptSlot, labelConditions } from './shape.js';
+import { shapeRecord, snValue, scriptSlot, labelConditions, isBlankScript } from './shape.js';
 import { assessConversational } from './conversational.js';
+import { buildReferenceChoices, dictionaryTablesFor } from './referenceChoices.js';
 
 const TABLES = {
   sc_cat_item: F.ITEM_FIELDS,
@@ -38,7 +39,9 @@ function dictCachePath(api, key = '') {
  * dicionario so muda quando alguem altera a estrutura da instancia, entao o TTL
  * e de 7 dias; `refresh: true` ignora o cache.
  */
-export async function loadDictionaries(api, log = () => {}, { refresh = false, tables = TABLES, cacheKey = '' } = {}) {
+export async function loadDictionaries(api, log = () => {}, { refresh = false, tables: wanted, cacheKey = '' } = {}) {
+  // Instancia com regra propria (referenceChoices.js) le tambem a tabela referenciada.
+  const tables = wanted ?? { ...TABLES, ...dictionaryTablesFor(api) };
   const cachePath = dictCachePath(api, cacheKey);
 
   if (!refresh && existsSync(cachePath)) {
@@ -89,7 +92,7 @@ const CHOICE_OUT = ['text', 'value', 'order', 'inactive', 'sys_id'];
  * Devolve tambem `pendingScripts` (scripts crus unicos, deduplicados por hash)
  * e `scriptIndex` (ref -> hash). Nada disso entra no JSON final.
  */
-export function build(collected, dictionaries) {
+export function build(collected, dictionaries, { withSource = false } = {}) {
   // Scripts identicos (copia-e-cola entre itens) sao explicados UMA vez.
   const scriptsByHash = new Map();
   const scriptIndex = {};
@@ -104,6 +107,9 @@ export function build(collected, dictionaries) {
   const takeScript = (record, table, label, field = 'script') => {
     const raw = snValue(record[field]);
     if (!raw) return scriptSlot(raw);
+    // Variavel e UI policy trazem stub/modelo padrao em quase todo registro.
+    if ((table === 'item_option_new' || table === 'catalog_ui_policy') && isBlankScript(raw)) return '';
+    const slot = () => scriptSlot(raw, { withSource });
     const ref = `${table}:${rawValue(record.sys_id)}:${field}`;
     const hash = createHash('sha1').update(raw).digest('hex').slice(0, 16);
     scriptIndex[ref] = hash;
@@ -111,7 +117,7 @@ export function build(collected, dictionaries) {
       scriptsByHash.set(hash, { hash, label: `${label} (${field})`, script: raw, used_by: [] });
     }
     scriptsByHash.get(hash).used_by.push(ref);
-    return scriptSlot(raw);
+    return slot();
   };
 
   const buildVariable = (v) => {
@@ -119,6 +125,10 @@ export function build(collected, dictionaries) {
       dictionary: dict('item_option_new'),
       labels: ['type'],
     });
+    // O shapeRecord copiou o texto cru; aqui ele vira slot (DIRETRIZ #3).
+    for (const field of F.VARIABLE_SCRIPT_FIELDS) {
+      out[field] = takeScript(v, 'item_option_new', snValue(v.name), field);
+    }
     // Regra do contrato: se existe choice cadastrada, mapeia -- independente do type.
     const choices = collected.choicesByVariable.get(rawValue(v.sys_id)) ?? [];
     if (choices.length) {
@@ -133,6 +143,9 @@ export function build(collected, dictionaries) {
     policies.map((p) => {
       const out = shapeRecord(p, F.UI_POLICY_FIELDS, { dictionary: dict('catalog_ui_policy') });
       out.catalog_conditions_label = labelConditions(snValue(p.catalog_conditions), variableNameById);
+      for (const field of ['script_true', 'script_false']) {
+        out[field] = takeScript(p, 'catalog_ui_policy', snValue(p.short_description) || rawValue(p.sys_id), field);
+      }
       out.ui_policy_actions = (collected.actionsByPolicy.get(rawValue(p.sys_id)) ?? []).map((a) =>
         shapeRecord(a, F.UI_POLICY_ACTION_FIELDS, { dictionary: dict('catalog_ui_policy_action') }),
       );
@@ -158,6 +171,8 @@ export function build(collected, dictionaries) {
     setPolicies.set(id, buildPolicies(collected.policiesBySet.get(id) ?? []));
     setScripts.set(id, buildClientScripts(collected.scriptsBySet.get(id) ?? []));
   }
+
+  const setsById = new Map(collected.sets.map((s) => [rawValue(s.sys_id), s]));
 
   const itens = collected.items.map((item) => {
     const id = rawValue(item.sys_id);
@@ -188,6 +203,14 @@ export function build(collected, dictionaries) {
     out.catalog_not_available_for = (collected.notAvailableByItem.get(id) ?? []).map((l) =>
       shapeRecord(l, F.UC_LINK_FIELDS, { dictionary: dict('sc_cat_item_user_criteria_no_mtom') }),
     );
+
+    // Opcoes das variaveis que apontam para outra tabela, por item. A chave so
+    // existe em instancia com regra propria (referenceChoices.js).
+    if (collected.referenceChoicesByItem) {
+      out.reference_choices = buildReferenceChoices(collected.referenceChoicesByItem.get(id), {
+        dictionaries, setsById,
+      });
+    }
 
     // Volume de chamados — so existe quando o extract roda com --volume.
     if (collected.volumeByItem?.has(id)) out.volume = collected.volumeByItem.get(id);

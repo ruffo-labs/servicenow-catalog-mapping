@@ -69,6 +69,14 @@ function fill(container, table, field = 'script', idx = index) {
 }
 
 const PRODUCER_SCRIPTS = ['script', 'post_insert_script', 'save_script'];
+const VARIABLE_SCRIPTS = ['read_script', 'post_insert_script', 'save_script'];
+const POLICY_SCRIPTS = ['script_true', 'script_false'];
+
+/** Scripts de variavel e de UI policy — o mesmo slot, em tabelas proprias. */
+function fillVariablesAndPolicies(variables = [], policies = []) {
+  for (const x of variables) for (const f of VARIABLE_SCRIPTS) fill(x, 'item_option_new', f);
+  for (const p of policies) for (const f of POLICY_SCRIPTS) fill(p, 'catalog_ui_policy', f);
+}
 
 // O index dos relacionados e outro arquivo. Carregado aqui porque as colecoes
 // deles podem estar DENTRO do catalog-map (depois do merge-related) ou fora,
@@ -80,9 +88,11 @@ for (const item of json.itens ?? []) {
     for (const field of PRODUCER_SCRIPTS) fill(item, 'sc_cat_item_producer', field);
   }
   for (const s of item.catalog_client_script ?? []) fill(s, 'catalog_script_client');
+  fillVariablesAndPolicies(item.catalog_variables, item.catalog_ui_policies);
 }
 for (const set of json.variable_sets ?? []) {
   for (const s of set.vs_catalog_client_scripts ?? []) fill(s, 'catalog_script_client');
+  fillVariablesAndPolicies(set.vs_variables, set.vs_ui_policies);
 }
 for (const uc of json.user_criteria ?? []) fill(uc, 'user_criteria');
 // Arquivo unico (pos merge-related): as notificacoes moram aqui dentro.
